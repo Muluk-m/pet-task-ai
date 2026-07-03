@@ -25,6 +25,7 @@ export const tasks = sqliteTable("tasks", {
   coverImageUrl: text("cover_image_url"),
   trackingNo: text("tracking_no"),
   note: text("note"),
+  orderChannel: text("order_channel"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   completedAt: text("completed_at"),
@@ -50,6 +51,7 @@ export const taskSteps = sqliteTable("task_steps", {
   status: text("status", { enum: ["pending", "completed"] })
     .notNull()
     .default("pending"),
+  sortOrder: integer("sort_order").notNull().default(0),
   resultUrl: text("result_url"),
   resultText: text("result_text"),
   completedAt: text("completed_at"),

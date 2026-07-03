@@ -57,14 +57,37 @@ export const reviewPlatformSchema = z.enum([
   "generic",
 ]);
 
-export const ecommercePlatformSchema = z.enum(["taobao", "jd", "other"]);
+/** 下单渠道 = 好评所在平台：任务在哪个平台下单，好评就发在哪 */
+export const orderChannelSchema = z.enum([
+  "taobao",
+  "jd",
+  "pdd",
+  "douyin",
+  "xiaohongshu",
+  "other",
+]);
+
+export const orderChannelNames: Record<
+  z.infer<typeof orderChannelSchema>,
+  string
+> = {
+  taobao: "淘宝",
+  jd: "京东",
+  pdd: "拼多多",
+  douyin: "抖音",
+  xiaohongshu: "小红书",
+  other: "其他",
+};
 
 export const ecommerceReviewTitles: Record<
-  z.infer<typeof ecommercePlatformSchema>,
+  z.infer<typeof orderChannelSchema>,
   string
 > = {
   taobao: "提交淘宝好评",
   jd: "提交京东好评",
+  pdd: "提交拼多多好评",
+  douyin: "提交抖音好评",
+  xiaohongshu: "提交小红书好评",
   other: "提交商品好评",
 };
 
@@ -93,9 +116,9 @@ export const createTaskSchema = z.object({
   xiaohongshuRequirement: z.string().optional(),
   douyinRequirement: z.string().optional(),
   reviewRequirement: z.string().optional(),
-  reviewPlatform: ecommercePlatformSchema.optional(),
   trackingNo: z.string().max(64).optional(),
   note: z.string().max(2000).optional(),
+  orderChannel: orderChannelSchema.optional(),
 });
 
 export const updateTaskSchema = z.object({
@@ -107,6 +130,7 @@ export const updateTaskSchema = z.object({
   cashbackAmount: z.number().nonnegative().nullable().optional(),
   trackingNo: z.string().max(64).nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
+  orderChannel: orderChannelSchema.nullable().optional(),
 });
 
 export const completeStepSchema = z.object({
@@ -114,11 +138,15 @@ export const completeStepSchema = z.object({
   resultText: z.string().optional(),
 });
 
+export const reorderStepsSchema = z.object({
+  stepIds: z.array(z.number().int().positive()).min(1),
+});
+
 export const addStepSchema = z.object({
   type: taskStepTypeSchema,
   title: z.string().min(1).optional(),
   requirement: z.string().optional(),
-  platform: ecommercePlatformSchema.optional(),
+  platform: orderChannelSchema.optional(),
 });
 
 const imageDataUrlSchema = z
@@ -170,7 +198,8 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
 export type MaterialType = z.infer<typeof materialTypeSchema>;
 export type ReviewPlatform = z.infer<typeof reviewPlatformSchema>;
-export type EcommercePlatform = z.infer<typeof ecommercePlatformSchema>;
+export type OrderChannel = z.infer<typeof orderChannelSchema>;
+export type ReorderStepsInput = z.infer<typeof reorderStepsSchema>;
 export type ReviewStyle = z.infer<typeof reviewStyleSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

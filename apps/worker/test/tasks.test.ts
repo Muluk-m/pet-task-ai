@@ -214,7 +214,7 @@ describe("tasks API", () => {
     const res = await postJson("/api/tasks", {
       title: "淘宝好评任务",
       requiresReview: true,
-      reviewPlatform: "taobao",
+      orderChannel: "taobao",
       requiresCashback: false,
     });
     expect(res.status).toBe(201);
@@ -229,6 +229,51 @@ describe("tasks API", () => {
     expect((review as unknown as { platform: string | null }).platform).toBe(
       "taobao",
     );
+  });
+
+  it("derives the review platform from the order channel", async () => {
+    const res = await postJson("/api/tasks", {
+      title: "拼多多置换",
+      requiresReview: true,
+      orderChannel: "pdd",
+      requiresCashback: false,
+    });
+    expect(res.status).toBe(201);
+    const { task: created } = (await res.json()) as TaskResponse;
+
+    const task = await getTask(created.id);
+    const review = task.steps?.find((s) => s.type === "ecommerce_review");
+    expect(
+      (review as unknown as { title: string; platform: string | null }).title,
+    ).toBe("提交拼多多好评");
+    expect((review as unknown as { platform: string | null }).platform).toBe(
+      "pdd",
+    );
+  });
+
+  it("reorders steps and rejects mismatched step lists", async () => {
+    const created = await createFullTask();
+    const task = await getTask(created.id);
+    const ids = (task.steps ?? []).map((s) => s.id);
+    expect(ids.length).toBeGreaterThan(2);
+
+    const reversed = [...ids].reverse();
+    const res = await request(`/api/tasks/${created.id}/steps/order`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ stepIds: reversed }),
+    });
+    expect(res.status).toBe(200);
+
+    const after = await getTask(created.id);
+    expect((after.steps ?? []).map((s) => s.id)).toEqual(reversed);
+
+    const bad = await request(`/api/tasks/${created.id}/steps/order`, {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ stepIds: [999999, ...reversed.slice(1)] }),
+    });
+    expect(bad.status).toBe(400);
   });
 
   it("uploads a task cover image to R2", async () => {

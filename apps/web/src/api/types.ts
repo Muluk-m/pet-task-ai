@@ -15,6 +15,7 @@ export type TaskStep = {
   title: string;
   requirement: string | null;
   platform: string | null;
+  sortOrder: number;
   status: StepStatus;
   resultUrl: string | null;
   resultText: string | null;
@@ -34,6 +35,7 @@ export type Task = {
   coverImageUrl: string | null;
   trackingNo: string | null;
   note: string | null;
+  orderChannel: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

@@ -20,7 +20,11 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useCreateTask, useExtractTask } from "../api/client";
 import { AiWorking } from "../components/ai-working";
-import { PlatformChipIcon, platformVisuals } from "../components/bits";
+import {
+  ChannelPicker,
+  PlatformChipIcon,
+  platformVisuals,
+} from "../components/bits";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -431,28 +435,12 @@ export function AiCreatePage() {
               }
             />
             {draft.requiresReview ? (
-              <div className="flex gap-2 border-b border-border/60 py-2.5 pl-12">
-                {(
-                  [
-                    { value: "taobao", label: "淘宝" },
-                    { value: "jd", label: "京东" },
-                    { value: "other", label: "其他平台" },
-                  ] as const
-                ).map((option) => (
-                  <button
-                    className={cn(
-                      "rounded-full border px-3.5 py-1 text-xs",
-                      (draft.reviewPlatform ?? "other") === option.value
-                        ? "border-primary bg-secondary font-medium text-primary"
-                        : "border-border text-muted-foreground",
-                    )}
-                    key={option.value}
-                    type="button"
-                    onClick={() => patch({ reviewPlatform: option.value })}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+              <div className="border-b border-border/60 py-2.5 pl-12">
+                <ChannelPicker
+                  compact
+                  value={draft.orderChannel ?? "other"}
+                  onChange={(channel) => patch({ orderChannel: channel })}
+                />
               </div>
             ) : null}
             <StepToggleRow

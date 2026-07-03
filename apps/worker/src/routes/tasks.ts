@@ -6,11 +6,12 @@ import {
   completeStepSchema,
   createTaskSchema,
   ecommerceReviewTitles,
+  reorderStepsSchema,
   stepTypeTitles,
   updateTaskSchema,
 } from "@pet-task-ai/shared";
 import type { TaskStepType } from "@pet-task-ai/shared";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { Hono } from "hono";
 
@@ -32,6 +33,11 @@ type NewTaskStep = {
   title: string;
   requirement?: string;
   platform?: string;
+  sortOrder?: number;
+};
+
+const stepsInOrder = {
+  orderBy: [asc(taskSteps.sortOrder), asc(taskSteps.id)],
 };
 
 const urlRequiredStepTypes = new Set<string>([
@@ -84,7 +90,7 @@ export const tasksRouter = new Hono<Env>()
     const db = c.get("db");
     const rows = await db.query.tasks.findMany({
       where: eq(tasks.userId, c.get("userId")),
-      with: { steps: true },
+      with: { steps: stepsInOrder },
       orderBy: [desc(tasks.createdAt)],
     });
     return c.json({ tasks: rows });
@@ -105,6 +111,7 @@ export const tasksRouter = new Hono<Env>()
         cashbackAmount: input.cashbackAmount,
         trackingNo: input.trackingNo,
         note: input.note,
+        orderChannel: input.orderChannel,
       })
       .returning();
 
@@ -132,12 +139,14 @@ export const tasksRouter = new Hono<Env>()
     }
 
     if (input.requiresReview) {
+      // 好评平台跟随下单渠道
+      const platform = input.orderChannel ?? "other";
       steps.push({
         taskId: task.id,
         type: "ecommerce_review",
-        title: ecommerceReviewTitles[input.reviewPlatform ?? "other"],
+        title: ecommerceReviewTitles[platform],
         requirement: input.reviewRequirement,
-        platform: input.reviewPlatform,
+        platform,
       });
     }
 
@@ -149,7 +158,9 @@ export const tasksRouter = new Hono<Env>()
       });
     }
 
-    await db.insert(taskSteps).values(steps);
+    await db
+      .insert(taskSteps)
+      .values(steps.map((step, index) => ({ ...step, sortOrder: index })));
 
     return c.json({ task }, 201);
   })
@@ -162,7 +173,7 @@ export const tasksRouter = new Hono<Env>()
 
     const task = await db.query.tasks.findFirst({
       where: and(eq(tasks.id, taskId), eq(tasks.userId, c.get("userId"))),
-      with: { steps: true },
+      with: { steps: stepsInOrder },
     });
 
     if (!task) {
@@ -302,6 +313,12 @@ export const tasksRouter = new Hono<Env>()
     }
 
     const input = c.req.valid("json");
+    const [{ maxOrder }] = await db
+      .select({
+        maxOrder: sql<number>`coalesce(max(${taskSteps.sortOrder}), -1)`,
+      })
+      .from(taskSteps)
+      .where(eq(taskSteps.taskId, taskId));
     const inserted = await db
       .insert(taskSteps)
       .values({
@@ -314,12 +331,52 @@ export const tasksRouter = new Hono<Env>()
             : stepTypeTitles[input.type]),
         requirement: input.requirement,
         platform: input.platform,
+        sortOrder: maxOrder + 1,
       })
       .returning();
 
     await recomputeTaskStatus(db, taskId);
     return c.json({ step: inserted[0] }, 201);
   })
+  .put(
+    "/:taskId/steps/order",
+    zValidator("json", reorderStepsSchema),
+    async (c) => {
+      const db = c.get("db");
+      const taskId = parseId(c.req.param("taskId"));
+      if (!taskId) {
+        return c.json({ error: "Invalid task id" }, 400);
+      }
+
+      const task = await getOwnedTask(db, taskId, c.get("userId"));
+      if (!task) {
+        return c.json({ error: "Task not found" }, 404);
+      }
+
+      const { stepIds } = c.req.valid("json");
+      const owned = await db
+        .select({ id: taskSteps.id })
+        .from(taskSteps)
+        .where(eq(taskSteps.taskId, taskId));
+      const ownedIds = new Set(owned.map((row) => row.id));
+      if (
+        stepIds.length !== ownedIds.size ||
+        !stepIds.every((id) => ownedIds.has(id))
+      ) {
+        return c.json({ error: "步骤列表与任务不匹配" }, 400);
+      }
+
+      const updates = stepIds.map((stepId, index) =>
+        db
+          .update(taskSteps)
+          .set({ sortOrder: index })
+          .where(eq(taskSteps.id, stepId)),
+      );
+      await db.batch([updates[0], ...updates.slice(1)]);
+
+      return c.json({ ok: true });
+    },
+  )
   .delete("/:taskId/steps/:stepId", async (c) => {
     const db = c.get("db");
     const taskId = parseId(c.req.param("taskId"));

@@ -1,4 +1,4 @@
-import type { EcommercePlatform } from "@pet-task-ai/shared";
+import type { OrderChannel } from "@pet-task-ai/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ImagePlus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
@@ -9,6 +9,7 @@ import {
   useTask,
   useUpdateTask,
 } from "../api/client";
+import { ChannelPicker } from "../components/bits";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -32,15 +33,6 @@ function Field({
     </label>
   );
 }
-
-const reviewPlatformOptions: Array<{
-  value: EcommercePlatform;
-  label: string;
-}> = [
-  { value: "taobao", label: "淘宝" },
-  { value: "jd", label: "京东" },
-  { value: "other", label: "其他平台" },
-];
 
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
@@ -69,8 +61,7 @@ export function TaskFormPage() {
   const [needXhs, setNeedXhs] = useState(false);
   const [needDouyin, setNeedDouyin] = useState(false);
   const [needReview, setNeedReview] = useState(false);
-  const [reviewPlatform, setReviewPlatform] =
-    useState<EcommercePlatform>("other");
+  const [orderChannel, setOrderChannel] = useState<OrderChannel>("other");
   const [needCashback, setNeedCashback] = useState(true);
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
   const [existingCover, setExistingCover] = useState<string | null>(null);
@@ -89,6 +80,7 @@ export function TaskFormPage() {
       setRuleText(task.ruleText ?? "");
       setTrackingNo(task.trackingNo ?? "");
       setNote(task.note ?? "");
+      setOrderChannel((task.orderChannel as OrderChannel) ?? "other");
       setExistingCover(task.coverImageUrl);
       setLoaded(true);
     }
@@ -141,6 +133,7 @@ export function TaskFormPage() {
           ruleText: ruleText.trim() || null,
           trackingNo: trackingNo.trim() || null,
           note: note.trim() || null,
+          orderChannel,
         });
         await submitCover(editingId);
         toast("修改已保存");
@@ -158,7 +151,7 @@ export function TaskFormPage() {
           requiresXiaohongshu: needXhs,
           requiresDouyin: needDouyin,
           requiresReview: needReview,
-          reviewPlatform: needReview ? reviewPlatform : undefined,
+          orderChannel,
           requiresCashback: needCashback,
         });
         await submitCover(result.task.id);
@@ -253,7 +246,13 @@ export function TaskFormPage() {
               onChange={(event) => setProductName(event.target.value)}
             />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <span className="text-sm font-medium text-muted-foreground">
+              下单渠道
+            </span>
+            <ChannelPicker value={orderChannel} onChange={setOrderChannel} />
+          </div>
+          <div className="grid grid-cols-2 gap-3 [&>*]:min-w-0">
             <Field label="返现金额（元）">
               <Input
                 inputMode="decimal"
@@ -264,6 +263,7 @@ export function TaskFormPage() {
             </Field>
             <Field label="截止日期">
               <Input
+                className="min-w-0"
                 type="date"
                 value={deadline}
                 onChange={(event) => setDeadline(event.target.value)}
@@ -312,27 +312,13 @@ export function TaskFormPage() {
             ))}
             <div className="border-b border-border/60 py-3">
               <div className="flex items-center justify-between text-[15px]">
-                <span>需电商好评</span>
+                <span>需平台好评</span>
                 <Switch checked={needReview} onCheckedChange={setNeedReview} />
               </div>
               {needReview ? (
-                <div className="mt-2.5 flex gap-2">
-                  {reviewPlatformOptions.map((option) => (
-                    <button
-                      className={cn(
-                        "rounded-full border px-4 py-1.5 text-sm",
-                        reviewPlatform === option.value
-                          ? "border-primary bg-secondary font-medium text-primary"
-                          : "border-border text-muted-foreground",
-                      )}
-                      key={option.value}
-                      type="button"
-                      onClick={() => setReviewPlatform(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  好评将发布在上方选择的下单渠道
+                </p>
               ) : null}
             </div>
             <div className="flex items-center justify-between py-3 text-[15px]">
