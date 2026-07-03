@@ -1,3 +1,4 @@
+import { type OrderChannel, orderChannelNames } from "@pet-task-ai/shared";
 import {
   CalendarClock,
   ChevronDown,
@@ -18,9 +19,11 @@ import type { TaskWithSteps } from "../api/types";
 import {
   CashbackBadge,
   PlaceholderImage,
+  PlatformBadge,
   StatusPill,
   StepRail,
   deadlineBadgeText,
+  platformVisuals,
 } from "../components/bits";
 import { toast } from "../components/toast";
 import { formatMoney } from "../lib/format";
@@ -63,24 +66,29 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
   const sortedSteps = [...task.steps].sort((a, b) => a.id - b.id);
   const firstPending = sortedSteps.find((s) => s.status === "pending");
   const waitingCashback = isWaitingCashback(task);
+  const waitingDelivery = firstPending?.type === "delivery";
   const hasCashback = task.steps.some((s) => s.type === "cashback");
 
-  async function quickConfirmCashback(event: React.MouseEvent) {
+  async function quickComplete(
+    event: React.MouseEvent,
+    stepType: "delivery" | "cashback",
+    doneToast: string,
+  ) {
     event.preventDefault();
     event.stopPropagation();
-    const cashbackStep = task.steps.find(
-      (s) => s.type === "cashback" && s.status === "pending",
+    const step = task.steps.find(
+      (s) => s.type === stepType && s.status === "pending",
     );
-    if (!cashbackStep) {
+    if (!step) {
       return;
     }
-    await completeStep.mutateAsync({ stepId: cashbackStep.id });
-    toast("已确认返现，任务完成 🎉");
+    await completeStep.mutateAsync({ stepId: step.id });
+    toast(doneToast);
   }
 
   return (
     <Link
-      className="block rounded-3xl bg-card p-3.5 shadow-xs active:scale-[0.99]"
+      className="block rounded-3xl border border-border/80 bg-card p-3.5 shadow-xs active:scale-[0.99]"
       to={`/tasks/${task.id}`}
     >
       <div className="flex gap-3">
@@ -94,6 +102,12 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
               <Store className="shrink-0" size={13} strokeWidth={1.8} />
               {task.merchantName ?? "未填写商家"}
             </span>
+            {task.orderChannel && platformVisuals[task.orderChannel] ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] font-medium text-foreground/70">
+                <PlatformBadge platform={task.orderChannel} size={13} />
+                {orderChannelNames[task.orderChannel as OrderChannel]}
+              </span>
+            ) : null}
             <CashbackBadge required={hasCashback} />
             <ChevronRight
               className="ml-auto shrink-0 text-muted-foreground/50"
@@ -117,6 +131,10 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
           <span className="rounded-lg bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning">
             最后一步：确认返现
           </span>
+        ) : waitingDelivery ? (
+          <span className="rounded-lg bg-secondary px-2.5 py-1 text-xs font-medium text-primary">
+            待收货：到货后确认
+          </span>
         ) : firstPending ? (
           <span className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
             下一步：{nextStepLabels[firstPending.type]}
@@ -129,9 +147,20 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
             className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground active:scale-95"
             disabled={completeStep.isPending}
             type="button"
-            onClick={quickConfirmCashback}
+            onClick={(event) =>
+              quickComplete(event, "cashback", "已确认返现，任务完成 🎉")
+            }
           >
             确认返现
+          </button>
+        ) : waitingDelivery ? (
+          <button
+            className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground active:scale-95"
+            disabled={completeStep.isPending}
+            type="button"
+            onClick={(event) => quickComplete(event, "delivery", "已确认收货")}
+          >
+            确认收货
           </button>
         ) : null}
       </div>

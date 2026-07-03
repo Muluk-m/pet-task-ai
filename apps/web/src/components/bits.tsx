@@ -31,7 +31,7 @@ export function PlaceholderImage({
         <img
           alt=""
           className="size-full object-cover"
-          loading="lazy"
+          decoding="sync"
           src={thumbnailUrl(src, 240)}
         />
       ) : (
