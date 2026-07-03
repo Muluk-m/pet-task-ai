@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useCreateTask, useExtractTask } from "../api/client";
+import { PlatformChipIcon, platformVisuals } from "../components/bits";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -392,8 +393,8 @@ export function AiCreatePage() {
 
             <StepToggleRow
               checked={draft.requiresXiaohongshu}
-              icon="红"
-              iconClass="bg-[#e0342c] text-white"
+              icon={<PlatformChipIcon platform="xiaohongshu" />}
+              iconClass={platformVisuals.xiaohongshu.iconClass}
               label="需小红书"
               placeholder="补充要求（字数、图数、话题等）"
               requirement={draft.xiaohongshuRequirement ?? ""}
@@ -404,8 +405,8 @@ export function AiCreatePage() {
             />
             <StepToggleRow
               checked={draft.requiresDouyin}
-              icon="抖"
-              iconClass="bg-[#1b1b1b] text-white"
+              icon={<PlatformChipIcon platform="douyin" />}
+              iconClass={platformVisuals.douyin.iconClass}
               label="需抖音"
               placeholder="补充要求（时长、话题等）"
               requirement={draft.douyinRequirement ?? ""}

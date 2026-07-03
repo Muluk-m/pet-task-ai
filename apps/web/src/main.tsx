@@ -3,7 +3,7 @@ import { QueryClient } from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { PawPrint } from "lucide-react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Route, Routes } from "react-router";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { useMe } from "./api/client";
 import { ToastHost } from "./components/toast";
 import { AppShell } from "./layout/AppShell";
@@ -69,6 +69,7 @@ function AuthGate() {
       <Route path="tasks/:taskId" element={<TaskDetailPage />} />
       <Route path="tasks/:taskId/edit" element={<TaskFormPage />} />
       <Route path="ai-create" element={<AiCreatePage />} />
+      <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>
   );
 }

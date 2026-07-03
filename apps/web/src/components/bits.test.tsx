@@ -21,19 +21,30 @@ function step(partial: Partial<TaskStep>): TaskStep {
 }
 
 describe("StepRail", () => {
-  it("renders the four content step labels", () => {
+  it("renders only the task's activated steps", () => {
     render(
       <StepRail
         steps={[
-          step({ id: 1, type: "xiaohongshu_note", status: "completed" }),
-          step({ id: 2, type: "cashback" }),
+          step({ id: 1, type: "delivery" }),
+          step({ id: 2, type: "xiaohongshu_note", status: "completed" }),
+          step({ id: 3, type: "cashback" }),
         ]}
       />,
     );
     expect(screen.getByText("小红书")).toBeDefined();
-    expect(screen.getByText("抖音")).toBeDefined();
-    expect(screen.getByText("好评")).toBeDefined();
     expect(screen.getByText("返现")).toBeDefined();
+    expect(screen.queryByText("到货")).toBeNull();
+    expect(screen.queryByText("抖音")).toBeNull();
+    expect(screen.queryByText("好评")).toBeNull();
+  });
+
+  it("labels the review step by its platform", () => {
+    render(
+      <StepRail
+        steps={[step({ id: 1, type: "ecommerce_review", platform: "taobao" })]}
+      />,
+    );
+    expect(screen.getByText("淘宝")).toBeDefined();
   });
 });
 

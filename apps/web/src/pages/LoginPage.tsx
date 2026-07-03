@@ -1,25 +1,54 @@
-import { LogIn, PawPrint } from "lucide-react";
+import { registerSchema } from "@pet-task-ai/shared";
+import { LogIn, PawPrint, UserRoundPlus } from "lucide-react";
 import { type FormEvent, useState } from "react";
-import { useLogin } from "../api/client";
+import { useLogin, useRegister } from "../api/client";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 
 export function LoginPage() {
   const login = useLogin();
+  const register = useRegister();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const isRegister = mode === "register";
+  const pending = login.isPending || register.isPending;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!username.trim() || !password) {
+    const name = username.trim();
+    if (!name || !password) {
       toast("请输入用户名和密码", "error");
       return;
     }
     try {
-      await login.mutateAsync({ username: username.trim(), password });
+      if (isRegister) {
+        const parsed = registerSchema.safeParse({ username: name, password });
+        if (!parsed.success) {
+          toast(parsed.error.issues[0]?.message ?? "输入不合法", "error");
+          return;
+        }
+        if (password !== confirmPassword) {
+          toast("两次输入的密码不一致", "error");
+          return;
+        }
+        await register.mutateAsync(parsed.data);
+        toast("注册成功，欢迎使用 🎉");
+      } else {
+        await login.mutateAsync({ username: name, password });
+      }
     } catch (error) {
-      toast(error instanceof Error ? error.message : "登录失败", "error");
+      toast(
+        error instanceof Error
+          ? error.message
+          : isRegister
+            ? "注册失败"
+            : "登录失败",
+        "error",
+      );
     }
   }
 
@@ -43,7 +72,9 @@ export function LoginPage() {
           </span>
           <Input
             autoComplete="username"
-            placeholder="请输入用户名"
+            placeholder={
+              isRegister ? "字母、数字、下划线或连字符" : "请输入用户名"
+            }
             value={username}
             onChange={(event) => setUsername(event.target.value)}
           />
@@ -53,21 +84,42 @@ export function LoginPage() {
             密码
           </span>
           <Input
-            autoComplete="current-password"
-            placeholder="请输入密码"
+            autoComplete={isRegister ? "new-password" : "current-password"}
+            placeholder={isRegister ? "至少 6 位" : "请输入密码"}
             type="password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
+        {isRegister ? (
+          <label className="block space-y-1.5">
+            <span className="text-sm font-medium text-muted-foreground">
+              确认密码
+            </span>
+            <Input
+              autoComplete="new-password"
+              placeholder="再输入一次密码"
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+            />
+          </label>
+        ) : null}
         <Button
           className="h-11 w-full rounded-2xl text-base"
-          disabled={login.isPending}
+          disabled={pending}
           type="submit"
         >
-          <LogIn />
-          {login.isPending ? "登录中..." : "登录"}
+          {isRegister ? <UserRoundPlus /> : <LogIn />}
+          {pending ? "提交中..." : isRegister ? "创建账号" : "登录"}
         </Button>
+        <button
+          className="block w-full text-center text-sm text-primary"
+          type="button"
+          onClick={() => setMode(isRegister ? "login" : "register")}
+        >
+          {isRegister ? "已有账号？去登录" : "没有账号？自助注册"}
+        </button>
       </form>
     </div>
   );

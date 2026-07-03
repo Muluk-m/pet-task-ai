@@ -21,6 +21,27 @@ function base64Decode(value: string) {
   return bytes;
 }
 
+const PBKDF2_ITERATIONS = 10_000;
+
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", hash: "SHA-256", salt, iterations: PBKDF2_ITERATIONS },
+    key,
+    256,
+  );
+  const saltB64 = btoa(String.fromCharCode(...salt));
+  const hashB64 = btoa(String.fromCharCode(...new Uint8Array(bits)));
+  return `pbkdf2$${PBKDF2_ITERATIONS}$${saltB64}$${hashB64}`;
+}
+
 export async function verifyPassword(
   password: string,
   stored: string,

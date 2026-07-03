@@ -27,7 +27,11 @@ import {
   useUploadMaterial,
 } from "../api/client";
 import type { Material, TaskWithSteps } from "../api/types";
-import { PlaceholderImage, stepChipMeta } from "../components/bits";
+import {
+  PlaceholderImage,
+  PlatformBadge,
+  stepChipMeta,
+} from "../components/bits";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import {
@@ -37,7 +41,7 @@ import {
   SheetTitle,
 } from "../components/ui/sheet";
 import { Slider } from "../components/ui/slider";
-import { formatDateTime } from "../lib/format";
+import { formatDateTime, formatMoney } from "../lib/format";
 import { cn } from "../lib/utils";
 
 const platformOptions: Array<{
@@ -357,7 +361,7 @@ export function GeneratePage() {
                 <p className="mt-1.5 text-[13px] text-muted-foreground">
                   返现金额{" "}
                   <span className="font-bold text-cta">
-                    ¥{selectedTask.cashbackAmount.toFixed(2)}
+                    {formatMoney(selectedTask.cashbackAmount)}
                   </span>
                 </p>
               ) : null}
@@ -449,24 +453,10 @@ export function GeneratePage() {
               type="button"
               onClick={() => setPlatform(option.value)}
             >
-              {option.value === "xiaohongshu" ? (
-                <span className="flex size-4.5 items-center justify-center rounded bg-[#e0342c] text-[9px] font-bold text-white">
-                  红
-                </span>
-              ) : option.value === "douyin" ? (
-                <span className="flex size-4.5 items-center justify-center rounded bg-[#1b1b1b] text-[9px] font-bold text-white">
-                  抖
-                </span>
-              ) : option.value === "taobao" ? (
-                <span className="flex size-4.5 items-center justify-center rounded bg-[#ff5000] text-[9px] font-bold text-white">
-                  淘
-                </span>
-              ) : option.value === "jd" ? (
-                <span className="flex size-4.5 items-center justify-center rounded bg-[#e1251b] text-[9px] font-bold text-white">
-                  京
-                </span>
-              ) : (
+              {option.value === "generic" ? (
                 option.icon
+              ) : (
+                <PlatformBadge platform={option.value} />
               )}
               {option.label}
             </button>

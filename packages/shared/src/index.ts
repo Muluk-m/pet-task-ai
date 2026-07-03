@@ -13,6 +13,28 @@ export const loginSchema = z.object({
   password: z.string().min(1),
 });
 
+export const registerSchema = z.object({
+  username: z
+    .string()
+    .min(2, "用户名至少 2 个字符")
+    .max(32, "用户名最多 32 个字符")
+    .regex(/^[\w-]+$/, "用户名只能包含字母、数字、下划线和连字符"),
+  password: z.string().min(6, "密码至少 6 位").max(72),
+});
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "请输入当前密码"),
+  newPassword: z.string().min(6, "新密码至少 6 位").max(72),
+});
+
+export const updateProfileSchema = z.object({
+  displayName: z
+    .string()
+    .trim()
+    .min(1, "名称不能为空")
+    .max(24, "名称最多 24 个字符"),
+});
+
 export const pushSubscribeSchema = z.object({
   endpoint: z.string().url(),
   keys: z.object({
@@ -138,6 +160,9 @@ export const stepTypeTitles: Record<
 
 export type TaskStepType = z.infer<typeof taskStepTypeSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
 export type MaterialType = z.infer<typeof materialTypeSchema>;
 export type ReviewPlatform = z.infer<typeof reviewPlatformSchema>;

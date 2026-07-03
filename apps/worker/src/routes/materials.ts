@@ -4,6 +4,7 @@ import { materialTypeSchema } from "@pet-task-ai/shared";
 import { and, desc, eq } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { Hono } from "hono";
+import { deleteAssetByUrl, putAsset } from "../lib/assets";
 
 type Env = {
   Bindings: {
@@ -61,13 +62,7 @@ export const materialsRouter = new Hono<Env>()
         return c.json({ error: "Only image files are supported" }, 400);
       }
 
-      const key = createAssetKey(file.name);
-      await c.env.BUCKET.put(key, file.stream(), {
-        httpMetadata: {
-          contentType: file.type,
-        },
-      });
-      assetUrl = `/api/materials/assets/${encodeURIComponent(key)}`;
+      assetUrl = (await putAsset(c.env.BUCKET, file)).url;
       assetMimeType = file.type;
     }
 
@@ -113,13 +108,7 @@ export const materialsRouter = new Hono<Env>()
       return c.notFound();
     }
 
-    const assetUrl = existing[0].assetUrl;
-    if (assetUrl?.startsWith("/api/materials/assets/")) {
-      const key = decodeURIComponent(
-        assetUrl.replace("/api/materials/assets/", ""),
-      );
-      await c.env.BUCKET.delete(key);
-    }
+    await deleteAssetByUrl(c.env.BUCKET, existing[0].assetUrl);
 
     await db.delete(materials).where(eq(materials.id, id));
     return c.json({ ok: true });
@@ -144,9 +133,4 @@ function parseTags(value: string | undefined) {
     .split(/[,，\s]+/)
     .map((tag) => tag.trim())
     .filter(Boolean);
-}
-
-function createAssetKey(fileName: string) {
-  const extension = fileName.includes(".") ? fileName.split(".").pop() : "jpg";
-  return `${new Date().toISOString().replace(/[:.]/g, "-")}-${crypto.randomUUID()}.${extension}`;
 }
