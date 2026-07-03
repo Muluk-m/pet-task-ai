@@ -12,6 +12,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  WandSparkles,
   X,
 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
@@ -662,17 +663,6 @@ export function MaterialsPage() {
             size={18}
           />
         </button>
-        <button
-          className="mt-3 flex w-full items-center gap-2 rounded-xl bg-primary/8 px-3 py-2.5 text-sm font-medium text-primary active:bg-primary/15"
-          type="button"
-          onClick={() => setAiSheetOpen(true)}
-        >
-          <Sparkles size={15} />
-          AI 生成素材
-          <span className="ml-auto text-xs font-normal text-muted-foreground">
-            描述 + 可选参考图
-          </span>
-        </button>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <button
             className="flex items-center justify-center gap-1.5 rounded-xl border border-success/20 bg-success-soft/60 py-2.5 text-sm font-medium text-success"
@@ -700,6 +690,40 @@ export function MaterialsPage() {
           </button>
         </div>
       </section>
+
+      <button
+        className="relative mt-3 w-full overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-[#12574d] to-[#0d443c] p-4 text-left text-white shadow-lg shadow-primary/30 active:scale-[0.99]"
+        type="button"
+        onClick={() => setAiSheetOpen(true)}
+      >
+        <Sparkles
+          className="absolute -right-3 -top-4 rotate-12 text-white/10"
+          size={88}
+          strokeWidth={1.5}
+        />
+        <PawPrint
+          className="absolute -bottom-5 right-16 -rotate-12 text-white/10"
+          size={56}
+          strokeWidth={1.5}
+        />
+        <div className="relative flex items-center gap-3">
+          <span className="flex size-13 shrink-0 items-center justify-center rounded-2xl bg-white/15">
+            <WandSparkles size={24} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <strong className="flex items-center gap-2 text-lg font-bold">
+              AI 生成素材
+              <span className="rounded-full bg-fab px-2 py-0.5 text-[10px] font-semibold">
+                ✨ 新
+              </span>
+            </strong>
+            <small className="mt-0.5 block text-xs text-white/75">
+              一句话描述出图 · 可带参考图改风格
+            </small>
+          </span>
+          <ChevronRight className="shrink-0 text-white/60" size={18} />
+        </div>
+      </button>
 
       <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto">
         {filterOptions.map((option) => (
