@@ -13,7 +13,8 @@
       "apps/**/dist/**",
       "apps/worker/drizzle/migrations/meta/**",
       "**/worker-configuration.d.ts",
-      "**/.wrangler/**"
+      "**/.wrangler/**",
+      ".gstack/**"
     ]
   },
   "linter": {
