@@ -55,4 +55,4 @@ jobs:
       - name: Smoke check
         run: |
           sleep 5
-          curl -sf https://pet-task-ai.maqiqian0316.workers.dev/api/health
+          curl -sf https://pet-task.nainma.online/api/health
