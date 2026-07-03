@@ -11,6 +11,7 @@ function step(partial: Partial<TaskStep>): TaskStep {
     title: "",
     requirement: null,
     platform: null,
+    sortOrder: 0,
     status: "pending",
     resultUrl: null,
     resultText: null,

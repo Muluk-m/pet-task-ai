@@ -2,6 +2,8 @@ import type { MaterialType } from "@pet-task-ai/shared";
 import {
   Camera,
   ChevronRight,
+  Copy,
+  Download,
   MessageSquareText,
   PawPrint,
   Quote,
@@ -9,6 +11,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -29,6 +32,7 @@ import {
 } from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
 import { dateGroupLabel, formatTime } from "../lib/format";
+import { copyImageToClipboard, downloadImage } from "../lib/image";
 import { cn } from "../lib/utils";
 
 const typeLabels: Record<MaterialType, string> = {
@@ -50,28 +54,49 @@ const filterOptions: Array<{ value: MaterialType | "all"; label: string }> = [
   { value: "merchant_review_image", label: "评论图" },
 ];
 
+async function copyMaterialImage(url: string) {
+  try {
+    await copyImageToClipboard(url);
+    toast("图片已复制");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "复制失败", "error");
+  }
+}
+
 function MaterialCard({
   material,
   onDelete,
+  onPreview,
 }: {
   material: Material;
   onDelete: () => void;
+  onPreview: () => void;
 }) {
   if (material.assetUrl) {
+    const assetUrl = material.assetUrl;
     return (
       <article className="relative overflow-hidden rounded-2xl bg-card shadow-xs">
-        <img
-          alt={material.title}
-          className="aspect-square w-full object-cover"
-          loading="lazy"
-          src={material.assetUrl}
-        />
+        <button className="block w-full" type="button" onClick={onPreview}>
+          <img
+            alt={material.title}
+            className="aspect-square w-full object-cover"
+            loading="lazy"
+            src={assetUrl}
+          />
+        </button>
         <button
           className="absolute right-1.5 top-1.5 rounded-full bg-black/45 p-1.5 text-white"
           type="button"
           onClick={onDelete}
         >
           <Trash2 size={13} />
+        </button>
+        <button
+          className="absolute right-9 top-1.5 rounded-full bg-black/45 p-1.5 text-white"
+          type="button"
+          onClick={() => copyMaterialImage(assetUrl)}
+        >
+          <Copy size={13} />
         </button>
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between bg-gradient-to-t from-black/50 to-transparent px-2 pb-2 pt-6 text-[11px] text-white">
           <span
@@ -122,6 +147,78 @@ function MaterialCard({
         </time>
       </div>
     </article>
+  );
+}
+
+function ImagePreviewOverlay({
+  material,
+  onClose,
+}: {
+  material: Material;
+  onClose: () => void;
+}) {
+  const assetUrl = material.assetUrl;
+  if (!assetUrl) {
+    return null;
+  }
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90">
+      <button
+        aria-label="关闭预览"
+        className="absolute inset-0"
+        type="button"
+        onClick={onClose}
+      />
+      <div className="pointer-events-none relative flex h-full flex-col">
+        <div className="flex justify-end p-3 pt-safe">
+          <button
+            className="pointer-events-auto rounded-full bg-white/15 p-2 text-white"
+            type="button"
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+          <img
+            alt={material.title}
+            className="pointer-events-auto max-h-full max-w-full rounded-xl object-contain"
+            src={assetUrl}
+          />
+        </div>
+        <div className="flex justify-center gap-3 p-6 pb-10">
+          <button
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-white/15 px-5 py-2.5 text-sm font-medium text-white active:scale-95"
+            type="button"
+            onClick={() => copyMaterialImage(assetUrl)}
+          >
+            <Copy size={15} />
+            复制
+          </button>
+          <button
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground active:scale-95"
+            type="button"
+            onClick={async () => {
+              try {
+                await downloadImage(
+                  assetUrl,
+                  `${material.title || "material"}.png`,
+                );
+                toast("已开始保存");
+              } catch (error) {
+                toast(
+                  error instanceof Error ? error.message : "保存失败",
+                  "error",
+                );
+              }
+            }}
+          >
+            <Download size={15} />
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -253,6 +350,7 @@ export function MaterialsPage() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [uploadType, setUploadType] = useState<MaterialType | null>(null);
+  const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
 
   const groups = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -413,6 +511,7 @@ export function MaterialsPage() {
                 key={material.id}
                 material={material}
                 onDelete={() => handleDelete(material)}
+                onPreview={() => setPreviewMaterial(material)}
               />
             ))}
           </div>
@@ -442,6 +541,13 @@ export function MaterialsPage() {
         <UploadSheet
           initialType={uploadType}
           onClose={() => setUploadType(null)}
+        />
+      ) : null}
+
+      {previewMaterial ? (
+        <ImagePreviewOverlay
+          material={previewMaterial}
+          onClose={() => setPreviewMaterial(null)}
         />
       ) : null}
     </div>

@@ -228,6 +228,19 @@ export function useAddStep(taskId: number) {
   });
 }
 
+export function useReorderSteps(taskId: number) {
+  const invalidate = useInvalidateTasks();
+  return useMutation({
+    mutationFn: (stepIds: number[]) =>
+      postJson<{ ok: boolean }>(
+        `/api/tasks/${taskId}/steps/order`,
+        { stepIds },
+        "PUT",
+      ),
+    onSuccess: invalidate,
+  });
+}
+
 export function useDeleteStep(taskId: number) {
   const invalidate = useInvalidateTasks();
   return useMutation({

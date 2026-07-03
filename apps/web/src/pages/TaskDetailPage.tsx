@@ -1,4 +1,21 @@
-import type { TaskStepType } from "@pet-task-ai/shared";
+import {
+  DndContext,
+  type DragEndEvent,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type { OrderChannel, TaskStepType } from "@pet-task-ai/shared";
+import { orderChannelNames, orderChannelSchema } from "@pet-task-ai/shared";
 import {
   Archive,
   BookOpenText,
@@ -7,6 +24,7 @@ import {
   ChevronLeft,
   Clock,
   Copy,
+  GripVertical,
   Lightbulb,
   MoreHorizontal,
   PackageSearch,
@@ -25,6 +43,7 @@ import {
   useArchiveTask,
   useCompleteStep,
   useDeleteStep,
+  useReorderSteps,
   useTask,
   useUndoStep,
 } from "../api/client";
@@ -63,27 +82,46 @@ const linkStepTypes = new Set<TaskStepType>([
   "douyin_post",
 ]);
 
-const ecomPlatformNames: Record<string, string> = {
-  taobao: "淘宝",
-  jd: "京东",
-};
+function reviewPlatformName(step: TaskStep): string | null {
+  if (step.type !== "ecommerce_review" || !step.platform) {
+    return null;
+  }
+  if (step.platform === "other") {
+    return null;
+  }
+  return orderChannelNames[step.platform as OrderChannel] ?? null;
+}
 
 function stepDisplayTitle(step: TaskStep): string {
-  if (step.type === "ecommerce_review" && step.platform) {
-    const name = ecomPlatformNames[step.platform];
-    return name ? `提交${name}好评` : stepTitles[step.type];
-  }
-  return stepTitles[step.type];
+  const name = reviewPlatformName(step);
+  return name ? `提交${name}好评` : stepTitles[step.type];
 }
 
 function stepDisplaySubtitle(step: TaskStep): string {
-  if (step.type === "ecommerce_review" && step.platform) {
-    const name = ecomPlatformNames[step.platform];
-    if (name) {
-      return `在${name}提交商品好评`;
-    }
-  }
-  return stepSubtitles[step.type];
+  const name = reviewPlatformName(step);
+  return name ? `在${name}提交商品好评` : stepSubtitles[step.type];
+}
+
+function SortableStepRow({
+  id,
+  children,
+}: {
+  id: number;
+  children: (handleProps: Record<string, unknown>) => React.ReactNode;
+}) {
+  const sortable = useSortable({ id });
+  return (
+    <div
+      className={sortable.isDragging ? "relative z-10" : undefined}
+      ref={sortable.setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(sortable.transform),
+        transition: sortable.transition,
+      }}
+    >
+      {children({ ...sortable.attributes, ...sortable.listeners })}
+    </div>
+  );
 }
 
 function isValidUrl(value: string): boolean {
@@ -129,16 +167,53 @@ export function TaskDetailPage() {
       return {};
     }
   });
-  const [ruleExpanded, setRuleExpanded] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addingStep, setAddingStep] = useState(false);
 
   const task = data?.task;
-  const steps = useMemo(
-    () => (task ? [...task.steps].sort((a, b) => a.id - b.id) : []),
-    [task],
+  const reorderSteps = useReorderSteps(taskId);
+  const [localOrder, setLocalOrder] = useState<number[] | null>(null);
+  const steps = useMemo(() => {
+    const sorted = task
+      ? [...task.steps].sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+      : [];
+    if (!localOrder) {
+      return sorted;
+    }
+    const byId = new Map(sorted.map((step) => [step.id, step]));
+    const overridden = localOrder
+      .map((id) => byId.get(id))
+      .filter((step): step is TaskStep => Boolean(step));
+    return overridden.length === sorted.length ? overridden : sorted;
+  }, [task, localOrder]);
+
+  const dragSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
   );
+
+  function handleStepDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) {
+      return;
+    }
+    const ids = steps.map((step) => step.id);
+    const next = arrayMove(
+      ids,
+      ids.indexOf(Number(active.id)),
+      ids.indexOf(Number(over.id)),
+    );
+    setLocalOrder(next);
+    reorderSteps.mutate(next, {
+      onError: () => {
+        setLocalOrder(null);
+        toast("排序保存失败，请重试", "error");
+      },
+    });
+  }
 
   const firstPendingId = steps.find((s) => s.status === "pending")?.id ?? null;
 
@@ -235,7 +310,7 @@ export function TaskDetailPage() {
 
   return (
     <div className="mx-auto max-w-[560px] px-4 pt-2 pb-36">
-      <header className="relative flex items-center justify-between py-2">
+      <header className="sticky top-0 z-30 -mx-4 flex items-center justify-between bg-background/95 px-4 py-2 backdrop-blur">
         <Button size="icon" variant="ghost" onClick={() => navigate(-1)}>
           <ChevronLeft className="size-5.5" />
         </Button>
@@ -248,7 +323,7 @@ export function TaskDetailPage() {
           <MoreHorizontal className="size-5" />
         </Button>
         {menuOpen ? (
-          <div className="absolute right-0 top-12 z-20 w-36 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
+          <div className="absolute right-4 top-12 z-20 w-36 overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
             <button
               className="flex w-full items-center gap-2 px-4 py-3 text-sm active:bg-muted"
               type="button"
@@ -309,34 +384,17 @@ export function TaskDetailPage() {
         </div>
       </section>
 
-      <button
-        className="mt-3 flex w-full items-start gap-3 rounded-3xl bg-secondary/70 p-4 text-left"
-        type="button"
-        onClick={() => setRuleExpanded((v) => !v)}
-      >
+      <div className="mt-3 flex w-full items-start gap-3 rounded-3xl bg-secondary/70 p-4">
         <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-card text-primary">
           <BookOpenText size={17} />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold">商家规则</span>
-          <span
-            className={cn(
-              "mt-0.5 block whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground",
-              !ruleExpanded &&
-                "overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:2]",
-            )}
-          >
+          <span className="mt-0.5 block whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
             {task.ruleText ?? "未填写商家规则，可在编辑任务里补充"}
           </span>
         </span>
-        <ChevronDown
-          className={cn(
-            "mt-2 shrink-0 text-muted-foreground transition-transform",
-            ruleExpanded && "rotate-180",
-          )}
-          size={16}
-        />
-      </button>
+      </div>
 
       {task.trackingNo || task.note ? (
         <div className="mt-3 space-y-2.5 rounded-3xl bg-card p-4 shadow-xs">
@@ -374,205 +432,238 @@ export function TaskDetailPage() {
       ) : null}
 
       <section className="mt-4">
-        {steps.map((step, index) => {
-          const done = step.status === "completed";
-          const isCurrent = step.id === firstPendingId;
-          const expanded = step.id === expandedId;
+        <DndContext
+          collisionDetection={closestCenter}
+          sensors={dragSensors}
+          onDragEnd={handleStepDragEnd}
+        >
+          <SortableContext
+            items={steps.map((step) => step.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            {steps.map((step, index) => {
+              const done = step.status === "completed";
+              const isCurrent = step.id === firstPendingId;
+              const expanded = step.id === expandedId;
 
-          return (
-            <div className="flex gap-3" key={step.id}>
-              <div className="flex flex-col items-center">
-                <span
-                  className={cn(
-                    "flex size-8.5 shrink-0 items-center justify-center rounded-full text-sm font-bold",
-                    done
-                      ? "bg-primary text-white"
-                      : isCurrent
-                        ? "bg-fab text-white"
-                        : "border-2 border-border bg-card text-muted-foreground",
-                  )}
-                >
-                  {done ? <Check size={16} strokeWidth={3} /> : index + 1}
-                </span>
-                {index < steps.length - 1 ? (
-                  <span className="w-0.5 flex-1 bg-border" />
-                ) : null}
-              </div>
+              return (
+                <SortableStepRow id={step.id} key={step.id}>
+                  {(handleProps) => (
+                    <div className="flex gap-3">
+                      <div className="flex flex-col items-center">
+                        <span
+                          className={cn(
+                            "flex size-8.5 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+                            done
+                              ? "bg-primary text-white"
+                              : isCurrent
+                                ? "bg-fab text-white"
+                                : "border-2 border-border bg-card text-muted-foreground",
+                          )}
+                        >
+                          {done ? (
+                            <Check size={16} strokeWidth={3} />
+                          ) : (
+                            index + 1
+                          )}
+                        </span>
+                        {index < steps.length - 1 ? (
+                          <span className="w-0.5 flex-1 bg-border" />
+                        ) : null}
+                      </div>
 
-              <div
-                className={cn(
-                  "mb-3 min-w-0 flex-1 rounded-2xl border p-4",
-                  expanded && !done && isCurrent
-                    ? "border-fab/25 bg-[#fdf1ec]"
-                    : done
-                      ? "border-success/15 bg-success-soft/35"
-                      : "border-border/60 bg-card",
-                )}
-              >
-                <button
-                  className="flex w-full items-center justify-between gap-2 text-left"
-                  type="button"
-                  onClick={() => setExpandedId(expanded ? -1 : step.id)}
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[15px] font-bold">
-                      {stepDisplayTitle(step)}
-                    </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {done && step.completedAt
-                        ? `已完成 · ${formatDateTime(step.completedAt)}`
-                        : stepDisplaySubtitle(step)}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    <span
-                      className={cn(
-                        "rounded-lg px-2 py-0.5 text-xs font-medium",
-                        done
-                          ? "bg-success-soft text-success"
-                          : "bg-warning-soft text-warning",
-                      )}
-                    >
-                      {done ? "已完成" : "待完成"}
-                    </span>
-                    <ChevronDown
-                      className={cn(
-                        "text-muted-foreground transition-transform",
-                        expanded && "rotate-180",
-                      )}
-                      size={15}
-                    />
-                  </span>
-                </button>
-
-                {expanded ? (
-                  <div className="mt-3 space-y-2.5">
-                    {step.requirement ? (
-                      <p className="rounded-xl bg-card/80 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
-                        要求：{step.requirement}
-                      </p>
-                    ) : null}
-
-                    {done ? (
-                      <>
-                        {step.resultUrl || step.resultText ? (
-                          <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
-                            <span className="min-w-0 flex-1 truncate text-sm">
-                              {step.resultUrl ?? step.resultText}
+                      <div
+                        className={cn(
+                          "mb-3 min-w-0 flex-1 rounded-2xl border p-4",
+                          expanded && !done && isCurrent
+                            ? "border-fab/25 bg-[#fdf1ec]"
+                            : done
+                              ? "border-success/15 bg-success-soft/35"
+                              : "border-border/60 bg-card",
+                        )}
+                      >
+                        <div className="flex items-start gap-1">
+                          <button
+                            className="flex min-w-0 flex-1 items-center justify-between gap-2 text-left"
+                            type="button"
+                            onClick={() =>
+                              setExpandedId(expanded ? -1 : step.id)
+                            }
+                          >
+                            <span className="min-w-0">
+                              <span className="block text-[15px] font-bold">
+                                {stepDisplayTitle(step)}
+                              </span>
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                {done && step.completedAt
+                                  ? `已完成 · ${formatDateTime(step.completedAt)}`
+                                  : stepDisplaySubtitle(step)}
+                              </span>
                             </span>
-                            <Button
-                              size="icon-xs"
-                              variant="ghost"
-                              onClick={() =>
-                                copyText(
-                                  step.resultUrl ?? step.resultText ?? "",
-                                )
-                              }
-                            >
-                              <Copy className="size-3.5" />
-                            </Button>
+                            <span className="flex shrink-0 items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "rounded-lg px-2 py-0.5 text-xs font-medium",
+                                  done
+                                    ? "bg-success-soft text-success"
+                                    : "bg-warning-soft text-warning",
+                                )}
+                              >
+                                {done ? "已完成" : "待完成"}
+                              </span>
+                              <ChevronDown
+                                className={cn(
+                                  "text-muted-foreground transition-transform",
+                                  expanded && "rotate-180",
+                                )}
+                                size={15}
+                              />
+                            </span>
+                          </button>
+                          <button
+                            {...handleProps}
+                            aria-label="拖动调整顺序"
+                            className="shrink-0 cursor-grab touch-none py-0.5 pl-1 text-muted-foreground/50 active:cursor-grabbing"
+                            type="button"
+                          >
+                            <GripVertical size={15} />
+                          </button>
+                        </div>
+
+                        {expanded ? (
+                          <div className="mt-3 space-y-2.5">
+                            {step.requirement ? (
+                              <p className="rounded-xl bg-card/80 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+                                要求：{step.requirement}
+                              </p>
+                            ) : null}
+
+                            {done ? (
+                              <>
+                                {step.resultUrl || step.resultText ? (
+                                  <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-3 py-2">
+                                    <span className="min-w-0 flex-1 truncate text-sm">
+                                      {step.resultUrl ?? step.resultText}
+                                    </span>
+                                    <Button
+                                      size="icon-xs"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        copyText(
+                                          step.resultUrl ??
+                                            step.resultText ??
+                                            "",
+                                        )
+                                      }
+                                    >
+                                      <Copy className="size-3.5" />
+                                    </Button>
+                                  </div>
+                                ) : null}
+                                <button
+                                  className="flex items-center gap-1 text-xs text-primary"
+                                  type="button"
+                                  onClick={async () => {
+                                    await undoStep.mutateAsync(step.id);
+                                    toast("已撤销完成");
+                                    setExpandedId(step.id);
+                                  }}
+                                >
+                                  <RotateCcw size={12} />
+                                  撤销完成
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                {linkStepTypes.has(step.type) ? (
+                                  <div className="space-y-1.5">
+                                    <p className="text-sm font-medium">
+                                      {step.type === "xiaohongshu_note"
+                                        ? "小红书笔记链接"
+                                        : "抖音帖子链接"}
+                                    </p>
+                                    <Input
+                                      className="bg-card"
+                                      placeholder="填写笔记链接 https://..."
+                                      value={drafts[step.id] ?? ""}
+                                      onChange={(event) =>
+                                        setDraft(step.id, event.target.value)
+                                      }
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      请确保内容为公开可见，且包含产品真实体验
+                                    </p>
+                                  </div>
+                                ) : step.type === "ecommerce_review" ? (
+                                  <div className="space-y-1.5">
+                                    <Textarea
+                                      className="bg-card"
+                                      placeholder="粘贴好评内容或评价链接（可选）"
+                                      rows={3}
+                                      value={drafts[step.id] ?? ""}
+                                      onChange={(event) =>
+                                        setDraft(step.id, event.target.value)
+                                      }
+                                    />
+                                    <button
+                                      className="flex items-center gap-1 text-xs text-primary"
+                                      type="button"
+                                      onClick={() =>
+                                        navigate(
+                                          `/generate?taskId=${task.id}&platform=${
+                                            step.platform === "taobao" ||
+                                            step.platform === "jd"
+                                              ? step.platform
+                                              : "generic"
+                                          }`,
+                                        )
+                                      }
+                                    >
+                                      <Wand2 size={12} />
+                                      没想好写什么？去生成好评
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <p className="text-sm text-muted-foreground">
+                                    {step.type === "delivery"
+                                      ? "商品到货后，点击下方「完成此步骤」"
+                                      : "返现到账后，点击下方「完成此步骤」"}
+                                  </p>
+                                )}
+                                <button
+                                  className="flex items-center gap-1 text-xs text-muted-foreground"
+                                  type="button"
+                                  onClick={async () => {
+                                    if (window.confirm("删除该步骤？")) {
+                                      try {
+                                        await deleteStep.mutateAsync(step.id);
+                                        toast("步骤已删除");
+                                      } catch (error) {
+                                        toast(
+                                          error instanceof Error
+                                            ? error.message
+                                            : "删除失败",
+                                          "error",
+                                        );
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={12} />
+                                  删除此步骤
+                                </button>
+                              </>
+                            )}
                           </div>
                         ) : null}
-                        <button
-                          className="flex items-center gap-1 text-xs text-primary"
-                          type="button"
-                          onClick={async () => {
-                            await undoStep.mutateAsync(step.id);
-                            toast("已撤销完成");
-                            setExpandedId(step.id);
-                          }}
-                        >
-                          <RotateCcw size={12} />
-                          撤销完成
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {linkStepTypes.has(step.type) ? (
-                          <div className="space-y-1.5">
-                            <p className="text-sm font-medium">
-                              {step.type === "xiaohongshu_note"
-                                ? "小红书笔记链接"
-                                : "抖音帖子链接"}
-                            </p>
-                            <Input
-                              className="bg-card"
-                              placeholder="填写笔记链接 https://..."
-                              value={drafts[step.id] ?? ""}
-                              onChange={(event) =>
-                                setDraft(step.id, event.target.value)
-                              }
-                            />
-                            <p className="text-xs text-muted-foreground">
-                              请确保内容为公开可见，且包含产品真实体验
-                            </p>
-                          </div>
-                        ) : step.type === "ecommerce_review" ? (
-                          <div className="space-y-1.5">
-                            <Textarea
-                              className="bg-card"
-                              placeholder="粘贴好评内容或评价链接（可选）"
-                              rows={3}
-                              value={drafts[step.id] ?? ""}
-                              onChange={(event) =>
-                                setDraft(step.id, event.target.value)
-                              }
-                            />
-                            <button
-                              className="flex items-center gap-1 text-xs text-primary"
-                              type="button"
-                              onClick={() =>
-                                navigate(
-                                  `/generate?taskId=${task.id}&platform=${
-                                    step.platform === "taobao" ||
-                                    step.platform === "jd"
-                                      ? step.platform
-                                      : "generic"
-                                  }`,
-                                )
-                              }
-                            >
-                              <Wand2 size={12} />
-                              没想好写什么？去生成好评
-                            </button>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {step.type === "delivery"
-                              ? "商品到货后，点击下方「完成此步骤」"
-                              : "返现到账后，点击下方「完成此步骤」"}
-                          </p>
-                        )}
-                        <button
-                          className="flex items-center gap-1 text-xs text-muted-foreground"
-                          type="button"
-                          onClick={async () => {
-                            if (window.confirm("删除该步骤？")) {
-                              try {
-                                await deleteStep.mutateAsync(step.id);
-                                toast("步骤已删除");
-                              } catch (error) {
-                                toast(
-                                  error instanceof Error
-                                    ? error.message
-                                    : "删除失败",
-                                  "error",
-                                );
-                              }
-                            }
-                          }}
-                        >
-                          <Trash2 size={12} />
-                          删除此步骤
-                        </button>
-                      </>
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            </div>
-          );
-        })}
+                      </div>
+                    </div>
+                  )}
+                </SortableStepRow>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
 
         {addableTypes.length > 0 && task.status !== "archived" ? (
           <div className="pl-11">
@@ -580,7 +671,7 @@ export function TaskDetailPage() {
               <div className="flex flex-wrap items-center gap-2">
                 {addableTypes.flatMap((type) =>
                   type === "ecommerce_review"
-                    ? (["taobao", "jd", "other"] as const).map((platform) => (
+                    ? orderChannelSchema.options.map((platform) => (
                         <Button
                           key={`${type}-${platform}`}
                           size="sm"
@@ -593,7 +684,7 @@ export function TaskDetailPage() {
                         >
                           {platform === "other"
                             ? "好评"
-                            : `${ecomPlatformNames[platform]}好评`}
+                            : `${orderChannelNames[platform]}好评`}
                         </Button>
                       ))
                     : [

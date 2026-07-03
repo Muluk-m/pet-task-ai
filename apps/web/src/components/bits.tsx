@@ -1,4 +1,5 @@
-import type { TaskStepType } from "@pet-task-ai/shared";
+import type { OrderChannel, TaskStepType } from "@pet-task-ai/shared";
+import { orderChannelNames, orderChannelSchema } from "@pet-task-ai/shared";
 import { Check, PawPrint, Star } from "lucide-react";
 import { Fragment } from "react";
 import { siTaobao, siTiktok, siXiaohongshu } from "simple-icons";
@@ -112,6 +113,11 @@ export const platformVisuals: Record<string, ChipMeta> = {
     iconClass: "bg-[#e1251b] text-white",
     iconText: "京",
   },
+  pdd: {
+    label: "拼多多",
+    iconClass: "bg-[#e02e24] text-white",
+    iconText: "拼",
+  },
 };
 
 export const stepChipMeta: Record<TaskStepType, ChipMeta> = {
@@ -171,6 +177,39 @@ export function BrandIcon({
     >
       <path d={brand.path} />
     </svg>
+  );
+}
+
+/** 下单渠道选择：带品牌小方标的 pill 单选组 */
+export function ChannelPicker({
+  value,
+  onChange,
+  compact = false,
+}: {
+  value: string;
+  onChange: (channel: OrderChannel) => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {orderChannelSchema.options.map((channel) => (
+        <button
+          className={cn(
+            "flex items-center rounded-full border",
+            compact ? "gap-1 px-3 py-1 text-xs" : "gap-1.5 px-3 py-1.5 text-sm",
+            value === channel
+              ? "border-primary bg-secondary font-medium text-primary"
+              : "border-border text-muted-foreground",
+          )}
+          key={channel}
+          type="button"
+          onClick={() => onChange(channel)}
+        >
+          <PlatformBadge platform={channel} size={compact ? 14 : 16} />
+          {orderChannelNames[channel]}
+        </button>
+      ))}
+    </div>
   );
 }
 

@@ -33,7 +33,7 @@ const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录
 - productName: 商品名，未提及则省略
 - requiresXiaohongshu / requiresDouyin / requiresReview / requiresCashback: 布尔值，规则中是否要求发小红书笔记 / 抖音帖子(视频) / 电商平台好评 / 有返现环节（提到返现金额即为 true）
 - xiaohongshuRequirement / douyinRequirement / reviewRequirement: 对应平台的具体要求摘要（字数、图数、话题标签、时长等），未要求该平台则省略
-- reviewPlatform: 好评所在的电商平台，"taobao"（淘宝/天猫）、"jd"（京东）或 "other"（其他/未明确），仅在 requiresReview 为 true 时给出
+- orderChannel: 下单渠道，"taobao"（淘宝/天猫）、"jd"（京东）、"pdd"（拼多多）、"douyin"（抖音）、"xiaohongshu"（小红书）或 "other"（其他/未明确）；好评默认发在下单渠道上
 - cashbackAmount: 返现金额数字（单位元），未提及则省略
 - deadline: 截止日期，格式 YYYY-MM-DD（只要日期不要时间），未提及则省略
 - confidence: 0~1 之间的数字，表示你对提取结果整体的置信度
