@@ -15,7 +15,7 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
   useDeleteMaterial,
@@ -39,6 +39,7 @@ import { dateGroupLabel, formatTime } from "../lib/format";
 import {
   compressImageFile,
   copyImageToClipboard,
+  copyText,
   downloadImage,
   fileToCompressedDataUrl,
   thumbnailUrl,
@@ -73,6 +74,51 @@ async function copyMaterialImage(url: string) {
   }
 }
 
+async function copyMaterialText(content: string) {
+  try {
+    await copyText(content);
+    toast("已复制文案");
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "复制失败", "error");
+  }
+}
+
+type ImageMaterialType = "pet_image" | "merchant_review_image";
+
+const imageTypeOptions = [
+  { value: "pet_image", label: "宠物图片" },
+  { value: "merchant_review_image", label: "评论图" },
+] as const;
+
+/** 图片素材类型单选（宠物图片 / 评论图）：一组按钮片段，供生图表单与确认态复用 */
+function TypePills({
+  value,
+  onChange,
+}: {
+  value: ImageMaterialType;
+  onChange: (value: ImageMaterialType) => void;
+}) {
+  return (
+    <>
+      {imageTypeOptions.map((option) => (
+        <button
+          className={cn(
+            "rounded-full border px-3.5 py-1.5 text-sm",
+            value === option.value
+              ? "border-primary bg-secondary font-medium text-primary"
+              : "border-border text-muted-foreground",
+          )}
+          key={option.value}
+          type="button"
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </>
+  );
+}
+
 function MaterialCard({
   material,
   onDelete,
@@ -90,7 +136,7 @@ function MaterialCard({
           <img
             alt={material.title}
             className="aspect-square w-full object-cover"
-            loading="lazy"
+            decoding="sync"
             src={thumbnailUrl(assetUrl, 400)}
           />
         </button>
@@ -132,13 +178,22 @@ function MaterialCard({
           fill="currentColor"
           strokeWidth={0}
         />
-        <button
-          className="p-0.5 text-muted-foreground"
-          type="button"
-          onClick={onDelete}
-        >
-          <Trash2 size={13} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            className="p-0.5 text-muted-foreground"
+            type="button"
+            onClick={() => copyMaterialText(material.content ?? "")}
+          >
+            <Copy size={13} />
+          </button>
+          <button
+            className="p-0.5 text-muted-foreground"
+            type="button"
+            onClick={onDelete}
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       </div>
       <p className="mt-1.5 flex-1 overflow-hidden text-[13px] leading-relaxed [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]">
         {material.content}
@@ -179,6 +234,11 @@ function AiImageSheet({
   );
   const [pickedIds, setPickedIds] = useState<Set<number>>(new Set());
   const [uploadedRefs, setUploadedRefs] = useState<string[]>([]);
+  const uploadMaterial = useUploadMaterial();
+  // 生成后的草稿（仅存在浏览器，未入库）：用户可改标题，类型沿用表单的 type/setType
+  const [draft, setDraft] = useState<{ dataUrl: string; title: string } | null>(
+    null,
+  );
 
   const refCount = pickedIds.size + uploadedRefs.length;
 
@@ -213,18 +273,93 @@ function AiImageSheet({
       return;
     }
     try {
-      const { material } = await generateImage.mutateAsync({
+      const { image } = await generateImage.mutateAsync({
         prompt: prompt.trim(),
         materialIds: [...pickedIds],
         referenceImages: uploadedRefs,
         size,
-        type,
       });
-      toast("已生成并存入素材库 ✨");
-      onDone(material);
+      // 进入可编辑确认态：标题自动取 prompt 前若干字（类型继续用表单的 type）
+      setDraft({ dataUrl: image, title: prompt.trim().slice(0, 24) });
     } catch (error) {
       toast(error instanceof Error ? error.message : "生成失败", "error");
     }
+  }
+
+  async function saveDraft() {
+    if (!draft) {
+      return;
+    }
+    try {
+      const blob = await (await fetch(draft.dataUrl)).blob();
+      const file = new File([blob], "ai-image.png", { type: "image/png" });
+      const form = new FormData();
+      form.set("type", type);
+      form.set("title", draft.title.trim() || "AI 生成图片");
+      form.set("content", prompt.trim());
+      form.set("tags", "ai");
+      form.set("file", file);
+      const { material } = await uploadMaterial.mutateAsync(form);
+      toast("已存入素材库 ✨");
+      onDone(material);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "保存失败", "error");
+    }
+  }
+
+  if (draft) {
+    return (
+      <Sheet open onOpenChange={(open) => !open && onClose()}>
+        <SheetContent
+          className="mx-auto max-w-[560px] rounded-t-3xl"
+          side="bottom"
+        >
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-1.5">
+              <Sparkles className="text-primary" size={17} />
+              确认保存到素材
+            </SheetTitle>
+          </SheetHeader>
+          <div className="max-h-[70dvh] space-y-3.5 overflow-y-auto px-4 pb-6">
+            <img
+              alt="生成结果"
+              className="mx-auto max-h-[40dvh] rounded-2xl object-contain"
+              src={draft.dataUrl}
+            />
+            <Input
+              placeholder="给这张图起个名（可选）"
+              value={draft.title}
+              onChange={(event) =>
+                setDraft((prev) =>
+                  prev ? { ...prev, title: event.target.value } : prev,
+                )
+              }
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <TypePills value={type} onChange={setType} />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                className="h-11 flex-1 rounded-2xl"
+                disabled={uploadMaterial.isPending}
+                onClick={saveDraft}
+              >
+                <Check />
+                {uploadMaterial.isPending ? "保存中..." : "保存到素材"}
+              </Button>
+              <Button
+                className="h-11 rounded-2xl"
+                disabled={uploadMaterial.isPending}
+                variant="outline"
+                onClick={() => setDraft(null)}
+              >
+                重新生成
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
   }
 
   const sizeOptions = [
@@ -337,26 +472,7 @@ function AiImageSheet({
               </button>
             ))}
             <span className="mx-1 h-5 w-px bg-border" />
-            {(
-              [
-                { value: "pet_image", label: "宠物图片" },
-                { value: "merchant_review_image", label: "评论图" },
-              ] as const
-            ).map((option) => (
-              <button
-                className={cn(
-                  "rounded-full border px-3.5 py-1.5 text-sm",
-                  type === option.value
-                    ? "border-primary bg-secondary font-medium text-primary"
-                    : "border-border text-muted-foreground",
-                )}
-                key={option.value}
-                type="button"
-                onClick={() => setType(option.value)}
-              >
-                {option.label}
-              </button>
-            ))}
+            <TypePills value={type} onChange={setType} />
           </div>
 
           <Button
@@ -459,18 +575,23 @@ function UploadSheet({
   const [type, setType] = useState<MaterialType>(initialType);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [tags, setTags] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  // 预览用的 object URL：在其变更前与组件卸载时释放，避免内存泄漏
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const isImageType = type !== "copywriting";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (title.trim() === "") {
-      toast("请填写素材标题", "error");
-      return;
-    }
     if (isImageType && !file) {
       toast("请拍照或选择图片", "error");
       return;
@@ -480,12 +601,18 @@ function UploadSheet({
       return;
     }
 
+    // 标题可选：图片留空自动按日期命名，文案留空取正文开头（相册/列表本就不显示标题）
+    const finalTitle =
+      title.trim() ||
+      (isImageType
+        ? `图片素材 ${new Date().toLocaleDateString("zh-CN")}`
+        : content.trim().slice(0, 24));
+
     try {
       const formData = new FormData();
       formData.set("type", type);
-      formData.set("title", title.trim());
+      formData.set("title", finalTitle);
       formData.set("content", content.trim());
-      formData.set("tags", tags);
       if (isImageType && file) {
         formData.set("file", await compressImageFile(file));
       }
@@ -525,35 +652,46 @@ function UploadSheet({
               </button>
             ))}
           </div>
-          <Input
-            placeholder="素材标题"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-          <Input
-            placeholder="标签，用空格或逗号分隔"
-            value={tags}
-            onChange={(event) => setTags(event.target.value)}
-          />
-          <Textarea
-            placeholder={isImageType ? "备注（可选）" : "文案内容"}
-            rows={3}
-            value={content}
-            onChange={(event) => setContent(event.target.value)}
-          />
           {isImageType ? (
-            <label className="flex cursor-pointer items-center gap-2 rounded-2xl border border-dashed border-input bg-muted/40 px-4 py-3.5 text-sm text-muted-foreground">
-              <Camera size={18} />
-              <span className="truncate">
-                {file ? file.name : "拍照或选择图片"}
-              </span>
+            <label className="block cursor-pointer">
               <input
                 accept="image/*"
                 className="hidden"
                 type="file"
-                onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+                onChange={(event) => {
+                  const picked = event.target.files?.[0] ?? null;
+                  setFile(picked);
+                  setPreviewUrl(picked ? URL.createObjectURL(picked) : null);
+                }}
               />
+              {previewUrl ? (
+                <img
+                  alt="预览"
+                  className="mx-auto max-h-[40dvh] rounded-2xl object-contain"
+                  src={previewUrl}
+                />
+              ) : (
+                <div className="flex aspect-square w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-input bg-muted/40 text-sm text-muted-foreground">
+                  <Camera size={24} />
+                  拍照或选择图片
+                </div>
+              )}
             </label>
+          ) : null}
+          <Input
+            placeholder={
+              isImageType ? "标题（可选，留空自动命名）" : "文案标题（可选）"
+            }
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+          />
+          {!isImageType ? (
+            <Textarea
+              placeholder="文案内容"
+              rows={4}
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+            />
           ) : null}
           <Button
             className="h-11 w-full rounded-2xl text-base"

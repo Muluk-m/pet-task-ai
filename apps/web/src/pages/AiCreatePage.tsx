@@ -156,6 +156,10 @@ export function AiCreatePage() {
         images: images.length > 0 ? images : undefined,
       });
       setDraft(result.extraction);
+      // 用户没手动粘规则时，用 AI 从截图/文字里转录出的规则原文回填，供确认与编辑
+      if (!ruleText.trim() && result.extraction.ruleText?.trim()) {
+        setRuleText(result.extraction.ruleText.trim());
+      }
     } catch (error) {
       toast(error instanceof Error ? error.message : "AI 识别失败", "error");
     }

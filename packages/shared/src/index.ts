@@ -171,8 +171,6 @@ export const generateImageSchema = z.object({
   materialIds: z.array(z.number().int().positive()).max(3).default([]),
   referenceImages: z.array(imageDataUrlSchema).max(3).default([]),
   size: z.enum(["1024x1024", "1024x1536", "1536x1024"]).default("1024x1024"),
-  type: z.enum(["pet_image", "merchant_review_image"]).default("pet_image"),
-  title: z.string().trim().max(80).optional(),
 });
 
 export const aiTaskExtractionSchema = createTaskSchema.extend({

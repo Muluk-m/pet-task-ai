@@ -254,11 +254,10 @@ export function useDeleteStep(taskId: number) {
 }
 
 export function useGenerateImage() {
-  const queryClient = useQueryClient();
+  // 生图只返回草稿 data URL，不落库；真正入库在用户确认后走 useUploadMaterial
   return useMutation({
     mutationFn: (input: GenerateImageInput) =>
-      postJson<{ material: Material }>("/api/ai/generate-image", input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["materials"] }),
+      postJson<{ image: string }>("/api/ai/generate-image", input),
   });
 }
 

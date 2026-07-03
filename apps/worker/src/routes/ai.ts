@@ -15,7 +15,7 @@ import {
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { Hono } from "hono";
-import { ASSET_URL_PREFIX, putAsset } from "../lib/assets";
+import { ASSET_URL_PREFIX } from "../lib/assets";
 import { getAiApiKey, getAiProvider } from "../lib/config";
 import {
   chatComplete,
@@ -24,6 +24,16 @@ import {
   generateImage,
 } from "../lib/openai";
 import type { ChatUserContent } from "../lib/openai";
+
+/** Uint8Array → base64（分块避免超出调用栈上限），用于把生图结果以 data URL 返回前端预览 */
+function base64FromBytes(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
 
 type Env = {
   Bindings: {
@@ -41,6 +51,7 @@ const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录
 - title: 简短任务标题，优先用商品名（含规格），如"全价冻干狗粮 1.5kg"
 - merchantName: 商家/店铺名，未提及则省略
 - productName: 商品名，未提及则省略
+- ruleText: 商家活动规则原文。请把与任务/返现规则相关的文字完整转录整理进来——当输入是截图时，务必把图片里的规则文字识别转录出来（保留关键条款、平台要求、返现方式与截止时间等），不要只写摘要
 - requiresXiaohongshu / requiresDouyin / requiresReview / requiresCashback: 布尔值，规则中是否要求发小红书笔记 / 抖音帖子(视频) / 电商平台好评 / 有返现环节（提到返现金额即为 true）
 - xiaohongshuRequirement / douyinRequirement / reviewRequirement: 对应平台的具体要求摘要（字数、图数、话题标签、时长等），未要求该平台则省略
 - orderChannel: 下单渠道，"taobao"（淘宝/天猫）、"jd"（京东）、"pdd"（拼多多）、"douyin"（抖音）、"xiaohongshu"（小红书）或 "other"（其他/未明确）；好评默认发在下单渠道上
@@ -375,26 +386,11 @@ ${platformPrompts[input.platform]}
         );
       }
 
-      const file = new File([bytes as BlobPart], "ai-image.png", {
-        type: "image/png",
+      // 生成结果先以 data URL 返回，由用户在前端确认（可改标题/类型）后再入库；
+      // 未确认不写 R2、不落 materials，避免草稿污染素材库
+      return c.json({
+        image: `data:image/png;base64,${base64FromBytes(bytes)}`,
       });
-      const { url } = await putAsset(c.env.BUCKET, file, "ai/");
-
-      const [material] = await db
-        .insert(materials)
-        .values({
-          userId,
-          type: input.type,
-          title:
-            input.title?.trim() || `AI 生成 · ${input.prompt.slice(0, 24)}`,
-          content: input.prompt,
-          assetUrl: url,
-          assetMimeType: "image/png",
-          tags: ["ai"],
-        })
-        .returning();
-
-      return c.json({ material }, 201);
     },
   )
   .get("/generations", async (c) => {

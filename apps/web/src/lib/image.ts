@@ -86,6 +86,11 @@ export function copyImageToClipboard(url: string): Promise<void> {
   ]);
 }
 
+/** 复制纯文本到剪贴板（页面侧再包 toast，与 copyImageToClipboard 分层一致） */
+export function copyText(value: string): Promise<void> {
+  return navigator.clipboard.writeText(value);
+}
+
 /**
  * 缩略图 URL：自定义域名上走 Cloudflare 图片转换（/cdn-cgi/image 按需缩放 +
  * format=auto + 边缘缓存）；localhost 与 workers.dev 不支持转换，原样返回。
