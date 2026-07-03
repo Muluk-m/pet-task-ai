@@ -1,6 +1,7 @@
 import type { MaterialType } from "@pet-task-ai/shared";
 import {
   Camera,
+  Check,
   ChevronRight,
   Copy,
   Download,
@@ -17,10 +18,12 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
   useDeleteMaterial,
+  useGenerateImage,
   useMaterials,
   useUploadMaterial,
 } from "../api/client";
 import type { Material } from "../api/types";
+import { AiWorking } from "../components/ai-working";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -36,6 +39,7 @@ import {
   compressImageFile,
   copyImageToClipboard,
   downloadImage,
+  fileToCompressedDataUrl,
   thumbnailUrl,
 } from "../lib/image";
 import { cn } from "../lib/utils";
@@ -152,6 +156,222 @@ function MaterialCard({
         </time>
       </div>
     </article>
+  );
+}
+
+function AiImageSheet({
+  imageMaterials,
+  onClose,
+  onDone,
+}: {
+  imageMaterials: Material[];
+  onClose: () => void;
+  onDone: (material: Material) => void;
+}) {
+  const generateImage = useGenerateImage();
+  const [prompt, setPrompt] = useState("");
+  const [size, setSize] = useState<"1024x1024" | "1024x1536" | "1536x1024">(
+    "1024x1024",
+  );
+  const [type, setType] = useState<"pet_image" | "merchant_review_image">(
+    "pet_image",
+  );
+  const [pickedIds, setPickedIds] = useState<Set<number>>(new Set());
+  const [uploadedRefs, setUploadedRefs] = useState<string[]>([]);
+
+  const refCount = pickedIds.size + uploadedRefs.length;
+
+  function togglePick(id: number) {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else if (refCount < 3) {
+        next.add(id);
+      }
+      return next;
+    });
+  }
+
+  async function addUploadRef(file: File | undefined) {
+    if (!file || refCount >= 3) {
+      return;
+    }
+    try {
+      setUploadedRefs((prev) => prev.slice());
+      const dataUrl = await fileToCompressedDataUrl(file, 1200);
+      setUploadedRefs((prev) => [...prev, dataUrl]);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "图片处理失败", "error");
+    }
+  }
+
+  async function handleGenerate() {
+    if (prompt.trim().length < 2) {
+      toast("请先描述要生成的图片", "error");
+      return;
+    }
+    try {
+      const { material } = await generateImage.mutateAsync({
+        prompt: prompt.trim(),
+        materialIds: [...pickedIds],
+        referenceImages: uploadedRefs,
+        size,
+        type,
+      });
+      toast("已生成并存入素材库 ✨");
+      onDone(material);
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "生成失败", "error");
+    }
+  }
+
+  const sizeOptions = [
+    { value: "1024x1024", label: "方图" },
+    { value: "1024x1536", label: "竖图" },
+    { value: "1536x1024", label: "横图" },
+  ] as const;
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        className="mx-auto max-w-[560px] rounded-t-3xl"
+        side="bottom"
+      >
+        <SheetHeader>
+          <SheetTitle className="flex items-center gap-1.5">
+            <Sparkles className="text-primary" size={17} />
+            AI 生成素材
+          </SheetTitle>
+        </SheetHeader>
+        <div className="max-h-[70dvh] space-y-3.5 overflow-y-auto px-4 pb-6">
+          <Textarea
+            placeholder="描述要生成的图片，如：一只橘猫趴在猫抓板上晒太阳，温馨家居氛围，真实摄影感"
+            rows={3}
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+          />
+
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-muted-foreground">
+              参考图（可选，最多 3 张）
+            </p>
+            <div className="no-scrollbar flex gap-2 overflow-x-auto">
+              <label className="flex size-16 shrink-0 cursor-pointer items-center justify-center rounded-xl border border-dashed border-input text-muted-foreground">
+                <Upload size={16} />
+                <input
+                  accept="image/*"
+                  className="hidden"
+                  type="file"
+                  onChange={(event) => {
+                    addUploadRef(event.target.files?.[0]);
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              {uploadedRefs.map((dataUrl, index) => (
+                <button
+                  className="relative size-16 shrink-0 overflow-hidden rounded-xl border-2 border-primary"
+                  key={`up-${dataUrl.slice(-16)}`}
+                  type="button"
+                  onClick={() =>
+                    setUploadedRefs((prev) =>
+                      prev.filter((_, i) => i !== index),
+                    )
+                  }
+                >
+                  <img
+                    alt="参考图"
+                    className="size-full object-cover"
+                    src={dataUrl}
+                  />
+                </button>
+              ))}
+              {imageMaterials.map((material) => {
+                const assetUrl = material.assetUrl;
+                if (!assetUrl) {
+                  return null;
+                }
+                const selected = pickedIds.has(material.id);
+                return (
+                  <button
+                    className={cn(
+                      "relative size-16 shrink-0 overflow-hidden rounded-xl border-2",
+                      selected ? "border-primary" : "border-transparent",
+                    )}
+                    key={material.id}
+                    type="button"
+                    onClick={() => togglePick(material.id)}
+                  >
+                    <img
+                      alt={material.title}
+                      className="size-full object-cover"
+                      src={thumbnailUrl(assetUrl, 128)}
+                    />
+                    {selected ? (
+                      <span className="absolute right-1 top-1 flex size-4.5 items-center justify-center rounded-full bg-primary text-white">
+                        <Check size={11} strokeWidth={3} />
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {sizeOptions.map((option) => (
+              <button
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-sm",
+                  size === option.value
+                    ? "border-primary bg-secondary font-medium text-primary"
+                    : "border-border text-muted-foreground",
+                )}
+                key={option.value}
+                type="button"
+                onClick={() => setSize(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+            <span className="mx-1 h-5 w-px bg-border" />
+            {(
+              [
+                { value: "pet_image", label: "宠物图片" },
+                { value: "merchant_review_image", label: "评论图" },
+              ] as const
+            ).map((option) => (
+              <button
+                className={cn(
+                  "rounded-full border px-3.5 py-1.5 text-sm",
+                  type === option.value
+                    ? "border-primary bg-secondary font-medium text-primary"
+                    : "border-border text-muted-foreground",
+                )}
+                key={option.value}
+                type="button"
+                onClick={() => setType(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <Button
+            className="h-11 w-full rounded-2xl"
+            disabled={generateImage.isPending}
+            onClick={handleGenerate}
+          >
+            <Sparkles />
+            {generateImage.isPending ? "生成中..." : "开始生成"}
+          </Button>
+          {generateImage.isPending ? (
+            <AiWorking hint="生图通常需要 20~60 秒" label="AI 正在生成图片" />
+          ) : null}
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -356,6 +576,7 @@ export function MaterialsPage() {
   const [keyword, setKeyword] = useState("");
   const [uploadType, setUploadType] = useState<MaterialType | null>(null);
   const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [aiSheetOpen, setAiSheetOpen] = useState(false);
 
   const groups = useMemo(() => {
     const query = keyword.trim().toLowerCase();
@@ -440,6 +661,17 @@ export function MaterialsPage() {
             className="shrink-0 text-muted-foreground/50"
             size={18}
           />
+        </button>
+        <button
+          className="mt-3 flex w-full items-center gap-2 rounded-xl bg-primary/8 px-3 py-2.5 text-sm font-medium text-primary active:bg-primary/15"
+          type="button"
+          onClick={() => setAiSheetOpen(true)}
+        >
+          <Sparkles size={15} />
+          AI 生成素材
+          <span className="ml-auto text-xs font-normal text-muted-foreground">
+            描述 + 可选参考图
+          </span>
         </button>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <button
@@ -553,6 +785,17 @@ export function MaterialsPage() {
         <ImagePreviewOverlay
           material={previewMaterial}
           onClose={() => setPreviewMaterial(null)}
+        />
+      ) : null}
+
+      {aiSheetOpen ? (
+        <AiImageSheet
+          imageMaterials={(data?.materials ?? []).filter((m) => m.assetUrl)}
+          onClose={() => setAiSheetOpen(false)}
+          onDone={(material) => {
+            setAiSheetOpen(false);
+            setPreviewMaterial(material);
+          }}
         />
       ) : null}
     </div>
