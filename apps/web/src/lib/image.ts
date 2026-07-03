@@ -109,9 +109,20 @@ export function thumbnailUrl(assetUrl: string, width: number): string {
 }
 
 /** 下载图片到本地/相册（资源均为同源，直接用下载链接，不经内存中转） */
-export function downloadImage(url: string, filename: string) {
+export async function downloadImage(url: string, filename: string) {
+  // 直接把远程 URL 挂到 <a download> 在移动端 / PWA 里不可靠（download 属性常被忽略，
+  // 点击退化成导航，可能被 SW/SPA 兜底成「保存网页」）。改为先取回 Blob 再用同源
+  // blob: URL 触发下载，跨浏览器最稳；文件名清洗掉非法字符（如日期里的 /）。
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error("图片加载失败");
+  }
+  const objectUrl = URL.createObjectURL(await response.blob());
   const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
+  anchor.href = objectUrl;
+  anchor.download = filename.replace(/[/\\:*?"<>|]/g, "-");
+  document.body.appendChild(anchor);
   anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
 }
