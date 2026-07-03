@@ -10,6 +10,7 @@ function step(partial: Partial<TaskStep>): TaskStep {
     type: "xiaohongshu_note",
     title: "",
     requirement: null,
+    platform: null,
     status: "pending",
     resultUrl: null,
     resultText: null,

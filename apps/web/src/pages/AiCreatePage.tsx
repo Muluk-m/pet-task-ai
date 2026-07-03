@@ -426,6 +426,31 @@ export function AiCreatePage() {
                 patch({ reviewRequirement: value || undefined })
               }
             />
+            {draft.requiresReview ? (
+              <div className="flex gap-2 border-b border-border/60 py-2.5 pl-12">
+                {(
+                  [
+                    { value: "taobao", label: "淘宝" },
+                    { value: "jd", label: "京东" },
+                    { value: "other", label: "其他平台" },
+                  ] as const
+                ).map((option) => (
+                  <button
+                    className={cn(
+                      "rounded-full border px-3.5 py-1 text-xs",
+                      (draft.reviewPlatform ?? "other") === option.value
+                        ? "border-primary bg-secondary font-medium text-primary"
+                        : "border-border text-muted-foreground",
+                    )}
+                    key={option.value}
+                    type="button"
+                    onClick={() => patch({ reviewPlatform: option.value })}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <StepToggleRow
               checked={draft.requiresCashback}
               icon="¥"

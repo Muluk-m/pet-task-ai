@@ -33,6 +33,7 @@ const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录
 - productName: 商品名，未提及则省略
 - requiresXiaohongshu / requiresDouyin / requiresReview / requiresCashback: 布尔值，规则中是否要求发小红书笔记 / 抖音帖子(视频) / 电商平台好评 / 有返现环节（提到返现金额即为 true）
 - xiaohongshuRequirement / douyinRequirement / reviewRequirement: 对应平台的具体要求摘要（字数、图数、话题标签、时长等），未要求该平台则省略
+- reviewPlatform: 好评所在的电商平台，"taobao"（淘宝/天猫）、"jd"（京东）或 "other"（其他/未明确），仅在 requiresReview 为 true 时给出
 - cashbackAmount: 返现金额数字（单位元），未提及则省略
 - deadline: 截止日期，格式 YYYY-MM-DD（只要日期不要时间），未提及则省略
 - confidence: 0~1 之间的数字，表示你对提取结果整体的置信度
@@ -54,6 +55,9 @@ const platformPrompts: Record<string, string> = {
   xiaohongshu:
     "平台：小红书笔记。可以使用 emoji、分行排版，结尾可带 2-4 个话题标签（#开头）",
   douyin: "平台：抖音视频文案。口播感强，节奏快，适合配视频朗读",
+  taobao:
+    "平台：淘宝/天猫商品评价。像真实淘宝买家的评价，口语化、实在，可提及包装、发货速度、客服态度，不要话题标签与站外链接",
+  jd: "平台：京东商品评价。像真实京东买家的评价，语气实在，可提及京东物流速度、包装完好、正品放心，不要话题标签与站外链接",
   generic: "平台：电商平台商品评价。像真实买家评价，不要出现站外链接与话题标签",
 };
 

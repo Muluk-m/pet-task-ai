@@ -1,12 +1,21 @@
-import { ChevronLeft } from "lucide-react";
+import type { EcommercePlatform } from "@pet-task-ai/shared";
+import { useQueryClient } from "@tanstack/react-query";
+import { ChevronLeft, ImagePlus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { useCreateTask, useTask, useUpdateTask } from "../api/client";
+import {
+  uploadTaskCover,
+  useCreateTask,
+  useTask,
+  useUpdateTask,
+} from "../api/client";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { Textarea } from "../components/ui/textarea";
+import { fileToCompressedDataUrl } from "../lib/image";
+import { cn } from "../lib/utils";
 
 function Field({
   label,
@@ -24,9 +33,24 @@ function Field({
   );
 }
 
+const reviewPlatformOptions: Array<{
+  value: EcommercePlatform;
+  label: string;
+}> = [
+  { value: "taobao", label: "淘宝" },
+  { value: "jd", label: "京东" },
+  { value: "other", label: "其他平台" },
+];
+
+async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
+  const res = await fetch(dataUrl);
+  return res.blob();
+}
+
 export function TaskFormPage() {
   const navigate = useNavigate();
   const params = useParams();
+  const queryClient = useQueryClient();
   const editingId = params.taskId ? Number(params.taskId) : null;
   const isEdit = editingId !== null;
 
@@ -43,7 +67,11 @@ export function TaskFormPage() {
   const [needXhs, setNeedXhs] = useState(false);
   const [needDouyin, setNeedDouyin] = useState(false);
   const [needReview, setNeedReview] = useState(false);
+  const [reviewPlatform, setReviewPlatform] =
+    useState<EcommercePlatform>("other");
   const [needCashback, setNeedCashback] = useState(true);
+  const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
+  const [existingCover, setExistingCover] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -57,9 +85,31 @@ export function TaskFormPage() {
       );
       setDeadline(task.deadline ?? "");
       setRuleText(task.ruleText ?? "");
+      setExistingCover(task.coverImageUrl);
       setLoaded(true);
     }
   }, [isEdit, data, loaded]);
+
+  async function pickCover(file: File | null) {
+    if (!file) {
+      return;
+    }
+    try {
+      setCoverDataUrl(await fileToCompressedDataUrl(file, 1200));
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "图片处理失败", "error");
+    }
+  }
+
+  async function submitCover(taskId: number) {
+    if (!coverDataUrl) {
+      return;
+    }
+    const formData = new FormData();
+    formData.set("file", await dataUrlToBlob(coverDataUrl), "cover.jpg");
+    await uploadTaskCover(taskId, formData);
+    queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -86,6 +136,7 @@ export function TaskFormPage() {
           deadline: deadline || null,
           ruleText: ruleText.trim() || null,
         });
+        await submitCover(editingId);
         toast("修改已保存");
         navigate(`/tasks/${editingId}`);
       } else {
@@ -99,8 +150,10 @@ export function TaskFormPage() {
           requiresXiaohongshu: needXhs,
           requiresDouyin: needDouyin,
           requiresReview: needReview,
+          reviewPlatform: needReview ? reviewPlatform : undefined,
           requiresCashback: needCashback,
         });
+        await submitCover(result.task.id);
         toast("任务已创建");
         navigate(`/tasks/${result.task.id}`, { replace: true });
       }
@@ -110,12 +163,11 @@ export function TaskFormPage() {
   }
 
   const submitting = createTask.isPending || updateTask.isPending;
+  const coverPreview = coverDataUrl ?? existingCover;
 
   const toggles = [
     { label: "需小红书笔记", checked: needXhs, onChange: setNeedXhs },
     { label: "需抖音帖子", checked: needDouyin, onChange: setNeedDouyin },
-    { label: "需电商好评", checked: needReview, onChange: setNeedReview },
-    { label: "需确认返现", checked: needCashback, onChange: setNeedCashback },
   ];
 
   return (
@@ -132,6 +184,46 @@ export function TaskFormPage() {
 
       <form onSubmit={handleSubmit}>
         <section className="space-y-4 rounded-3xl border border-border/60 bg-card p-4">
+          <div className="flex items-center gap-4">
+            {coverPreview ? (
+              <div className="relative size-22 shrink-0 overflow-hidden rounded-2xl">
+                <img
+                  alt="任务封面"
+                  className="size-full object-cover"
+                  src={coverPreview}
+                />
+                <button
+                  className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-black/55 text-white"
+                  type="button"
+                  onClick={() => {
+                    setCoverDataUrl(null);
+                    setExistingCover(null);
+                  }}
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : null}
+            <label
+              className={cn(
+                "flex cursor-pointer flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed border-input text-xs text-muted-foreground",
+                coverPreview ? "size-22 shrink-0" : "h-22 w-full",
+              )}
+            >
+              <ImagePlus size={20} />
+              {coverPreview ? "更换" : "上传商品封面图（可选）"}
+              <input
+                accept="image/*"
+                className="hidden"
+                type="file"
+                onChange={(event) => {
+                  pickCover(event.target.files?.[0] ?? null);
+                  event.target.value = "";
+                }}
+              />
+            </label>
+          </div>
+
           <Field label="任务标题 *">
             <Input
               placeholder="如：全价冻干狗粮 1.5kg"
@@ -185,7 +277,7 @@ export function TaskFormPage() {
             <h3 className="mb-1 font-semibold">任务步骤</h3>
             {toggles.map((item) => (
               <div
-                className="flex items-center justify-between border-b border-border/60 py-3 text-[15px] last:border-b-0 last:pb-0"
+                className="flex items-center justify-between border-b border-border/60 py-3 text-[15px]"
                 key={item.label}
               >
                 <span>{item.label}</span>
@@ -195,6 +287,38 @@ export function TaskFormPage() {
                 />
               </div>
             ))}
+            <div className="border-b border-border/60 py-3">
+              <div className="flex items-center justify-between text-[15px]">
+                <span>需电商好评</span>
+                <Switch checked={needReview} onCheckedChange={setNeedReview} />
+              </div>
+              {needReview ? (
+                <div className="mt-2.5 flex gap-2">
+                  {reviewPlatformOptions.map((option) => (
+                    <button
+                      className={cn(
+                        "rounded-full border px-4 py-1.5 text-sm",
+                        reviewPlatform === option.value
+                          ? "border-primary bg-secondary font-medium text-primary"
+                          : "border-border text-muted-foreground",
+                      )}
+                      key={option.value}
+                      type="button"
+                      onClick={() => setReviewPlatform(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-between py-3 text-[15px]">
+              <span>需确认返现</span>
+              <Switch
+                checked={needCashback}
+                onCheckedChange={setNeedCashback}
+              />
+            </div>
           </section>
         ) : (
           <p className="mt-3 px-1 text-sm text-muted-foreground">

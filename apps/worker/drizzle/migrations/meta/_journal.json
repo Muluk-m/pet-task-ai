@@ -29,6 +29,13 @@
       "when": 1783013126145,
       "tag": "0003_parched_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1783042682981,
+      "tag": "0004_chemical_vampiro",
+      "breakpoints": true
     }
   ]
 }

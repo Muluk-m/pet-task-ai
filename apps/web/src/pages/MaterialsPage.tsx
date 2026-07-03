@@ -226,7 +226,6 @@ function UploadSheet({
               </span>
               <input
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 type="file"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}

@@ -62,6 +62,29 @@ const linkStepTypes = new Set<TaskStepType>([
   "douyin_post",
 ]);
 
+const ecomPlatformNames: Record<string, string> = {
+  taobao: "淘宝",
+  jd: "京东",
+};
+
+function stepDisplayTitle(step: TaskStep): string {
+  if (step.type === "ecommerce_review" && step.platform) {
+    const name = ecomPlatformNames[step.platform];
+    return name ? `提交${name}好评` : stepTitles[step.type];
+  }
+  return stepTitles[step.type];
+}
+
+function stepDisplaySubtitle(step: TaskStep): string {
+  if (step.type === "ecommerce_review" && step.platform) {
+    const name = ecomPlatformNames[step.platform];
+    if (name) {
+      return `在${name}提交商品好评`;
+    }
+  }
+  return stepSubtitles[step.type];
+}
+
 function isValidUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -183,7 +206,7 @@ export function TaskDetailPage() {
       await completeStep.mutateAsync({ stepId: expandedStep.id });
     }
 
-    toast(`「${stepTitles[expandedStep.type]}」已完成`);
+    toast(`「${stepDisplayTitle(expandedStep)}」已完成`);
     setExpandedId(null);
   }
 
@@ -250,6 +273,7 @@ export function TaskDetailPage() {
           <PlaceholderImage
             badge={deadlineBadgeText(task.deadline)}
             size="lg"
+            src={task.coverImageUrl}
           />
           <div className="min-w-0 flex-1 space-y-1.5">
             <StatusPill status={task.status} />
@@ -356,12 +380,12 @@ export function TaskDetailPage() {
                 >
                   <span className="min-w-0">
                     <span className="block text-[15px] font-bold">
-                      {stepTitles[step.type]}
+                      {stepDisplayTitle(step)}
                     </span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
                       {done && step.completedAt
                         ? `已完成 · ${formatDateTime(step.completedAt)}`
-                        : stepSubtitles[step.type]}
+                        : stepDisplaySubtitle(step)}
                     </span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
@@ -462,7 +486,14 @@ export function TaskDetailPage() {
                               className="flex items-center gap-1 text-xs text-primary"
                               type="button"
                               onClick={() =>
-                                navigate(`/generate?taskId=${task.id}`)
+                                navigate(
+                                  `/generate?taskId=${task.id}&platform=${
+                                    step.platform === "taobao" ||
+                                    step.platform === "jd"
+                                      ? step.platform
+                                      : "generic"
+                                  }`,
+                                )
                               }
                             >
                               <Wand2 size={12} />
@@ -511,20 +542,39 @@ export function TaskDetailPage() {
           <div className="pl-11">
             {addingStep ? (
               <div className="flex flex-wrap items-center gap-2">
-                {addableTypes.map((type) => (
-                  <Button
-                    key={type}
-                    size="sm"
-                    variant="outline"
-                    onClick={async () => {
-                      await addStep.mutateAsync({ type });
-                      setAddingStep(false);
-                      toast("步骤已添加");
-                    }}
-                  >
-                    {stepChipMeta[type].label}
-                  </Button>
-                ))}
+                {addableTypes.flatMap((type) =>
+                  type === "ecommerce_review"
+                    ? (["taobao", "jd", "other"] as const).map((platform) => (
+                        <Button
+                          key={`${type}-${platform}`}
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await addStep.mutateAsync({ type, platform });
+                            setAddingStep(false);
+                            toast("步骤已添加");
+                          }}
+                        >
+                          {platform === "other"
+                            ? "好评"
+                            : `${ecomPlatformNames[platform]}好评`}
+                        </Button>
+                      ))
+                    : [
+                        <Button
+                          key={type}
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            await addStep.mutateAsync({ type });
+                            setAddingStep(false);
+                            toast("步骤已添加");
+                          }}
+                        >
+                          {stepChipMeta[type].label}
+                        </Button>,
+                      ],
+                )}
                 <Button
                   size="sm"
                   variant="ghost"

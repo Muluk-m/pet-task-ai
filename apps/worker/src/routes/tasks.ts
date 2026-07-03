@@ -5,6 +5,7 @@ import {
   addStepSchema,
   completeStepSchema,
   createTaskSchema,
+  ecommerceReviewTitles,
   stepTypeTitles,
   updateTaskSchema,
 } from "@pet-task-ai/shared";
@@ -16,6 +17,9 @@ import { Hono } from "hono";
 type Db = DrizzleD1Database<typeof schema>;
 
 type Env = {
+  Bindings: {
+    BUCKET: R2Bucket;
+  };
   Variables: {
     db: Db;
     userId: number;
@@ -27,6 +31,7 @@ type NewTaskStep = {
   type: TaskStepType;
   title: string;
   requirement?: string;
+  platform?: string;
 };
 
 const urlRequiredStepTypes = new Set<string>([
@@ -128,8 +133,9 @@ export const tasksRouter = new Hono<Env>()
       steps.push({
         taskId: task.id,
         type: "ecommerce_review",
-        title: stepTypeTitles.ecommerce_review,
+        title: ecommerceReviewTitles[input.reviewPlatform ?? "other"],
         requirement: input.reviewRequirement,
+        platform: input.reviewPlatform,
       });
     }
 
@@ -180,6 +186,52 @@ export const tasksRouter = new Hono<Env>()
     if (updated.length === 0) {
       return c.json({ error: "Task not found" }, 404);
     }
+
+    return c.json({ task: updated[0] });
+  })
+  .post("/:taskId/cover", async (c) => {
+    const db = c.get("db");
+    const taskId = parseId(c.req.param("taskId"));
+    if (!taskId) {
+      return c.json({ error: "Invalid task id" }, 400);
+    }
+
+    const task = await getOwnedTask(db, taskId, c.get("userId"));
+    if (!task) {
+      return c.json({ error: "Task not found" }, 404);
+    }
+
+    const form = await c.req.formData();
+    const file = form.get("file");
+    if (!(file instanceof File) || file.size === 0) {
+      return c.json({ error: "请选择图片文件" }, 400);
+    }
+    if (!file.type.startsWith("image/")) {
+      return c.json({ error: "仅支持图片文件" }, 400);
+    }
+
+    const extension = file.type.split("/")[1] ?? "jpg";
+    const key = `task-cover-${crypto.randomUUID()}.${extension}`;
+    await c.env.BUCKET.put(key, file.stream(), {
+      httpMetadata: { contentType: file.type },
+    });
+
+    // 替换封面时清理旧文件
+    if (task.coverImageUrl?.startsWith("/api/materials/assets/")) {
+      const oldKey = decodeURIComponent(
+        task.coverImageUrl.replace("/api/materials/assets/", ""),
+      );
+      await c.env.BUCKET.delete(oldKey);
+    }
+
+    const updated = await db
+      .update(tasks)
+      .set({
+        coverImageUrl: `/api/materials/assets/${encodeURIComponent(key)}`,
+        updatedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(tasks.id, taskId))
+      .returning();
 
     return c.json({ task: updated[0] });
   })
@@ -253,8 +305,13 @@ export const tasksRouter = new Hono<Env>()
       .values({
         taskId,
         type: input.type,
-        title: input.title ?? stepTypeTitles[input.type],
+        title:
+          input.title ??
+          (input.type === "ecommerce_review"
+            ? ecommerceReviewTitles[input.platform ?? "other"]
+            : stepTypeTitles[input.type]),
         requirement: input.requirement,
+        platform: input.platform,
       })
       .returning();
 

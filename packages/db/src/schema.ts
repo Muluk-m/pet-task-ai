@@ -20,6 +20,7 @@ export const tasks = sqliteTable("tasks", {
     .default("active"),
   cashbackAmount: real("cashback_amount"),
   deadline: text("deadline"),
+  coverImageUrl: text("cover_image_url"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   completedAt: text("completed_at"),
@@ -41,6 +42,7 @@ export const taskSteps = sqliteTable("task_steps", {
   }).notNull(),
   title: text("title").notNull(),
   requirement: text("requirement"),
+  platform: text("platform"),
   status: text("status", { enum: ["pending", "completed"] })
     .notNull()
     .default("pending"),

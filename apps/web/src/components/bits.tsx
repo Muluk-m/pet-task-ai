@@ -9,10 +9,12 @@ export function PlaceholderImage({
   size = "md",
   className,
   badge,
+  src,
 }: {
   size?: "md" | "lg";
   className?: string;
   badge?: string | null;
+  src?: string | null;
 }) {
   return (
     <div
@@ -22,7 +24,16 @@ export function PlaceholderImage({
         className,
       )}
     >
-      <PawPrint size={size === "lg" ? 36 : 30} strokeWidth={1.5} />
+      {src ? (
+        <img
+          alt=""
+          className="size-full object-cover"
+          loading="lazy"
+          src={src}
+        />
+      ) : (
+        <PawPrint size={size === "lg" ? 36 : 30} strokeWidth={1.5} />
+      )}
       {badge ? (
         <span className="absolute bottom-0 left-0 rounded-tr-xl bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
           {badge}

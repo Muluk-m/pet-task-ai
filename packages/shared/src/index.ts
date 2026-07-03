@@ -30,8 +30,21 @@ export const materialTypeSchema = z.enum([
 export const reviewPlatformSchema = z.enum([
   "xiaohongshu",
   "douyin",
+  "taobao",
+  "jd",
   "generic",
 ]);
+
+export const ecommercePlatformSchema = z.enum(["taobao", "jd", "other"]);
+
+export const ecommerceReviewTitles: Record<
+  z.infer<typeof ecommercePlatformSchema>,
+  string
+> = {
+  taobao: "提交淘宝好评",
+  jd: "提交京东好评",
+  other: "提交商品好评",
+};
 
 export const reviewStyleSchema = z.enum([
   "real_daily",
@@ -58,6 +71,7 @@ export const createTaskSchema = z.object({
   xiaohongshuRequirement: z.string().optional(),
   douyinRequirement: z.string().optional(),
   reviewRequirement: z.string().optional(),
+  reviewPlatform: ecommercePlatformSchema.optional(),
 });
 
 export const updateTaskSchema = z.object({
@@ -78,6 +92,7 @@ export const addStepSchema = z.object({
   type: taskStepTypeSchema,
   title: z.string().min(1).optional(),
   requirement: z.string().optional(),
+  platform: ecommercePlatformSchema.optional(),
 });
 
 const imageDataUrlSchema = z
@@ -126,6 +141,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type PushSubscribeInput = z.infer<typeof pushSubscribeSchema>;
 export type MaterialType = z.infer<typeof materialTypeSchema>;
 export type ReviewPlatform = z.infer<typeof reviewPlatformSchema>;
+export type EcommercePlatform = z.infer<typeof ecommercePlatformSchema>;
 export type ReviewStyle = z.infer<typeof reviewStyleSchema>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;

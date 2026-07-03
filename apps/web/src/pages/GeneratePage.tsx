@@ -50,6 +50,10 @@ const platformOptions: Array<{
   { value: "generic", label: "好评", icon: <ThumbsUp size={14} /> },
 ];
 
+const platformValues = new Set<string>(
+  platformOptions.map((option) => option.value),
+);
+
 const styleOptions: Array<{
   value: ReviewStyle;
   label: string;
@@ -102,7 +106,10 @@ function TaskPickerSheet({
               type="button"
               onClick={() => onPick(task)}
             >
-              <PlaceholderImage className="size-14 rounded-xl" />
+              <PlaceholderImage
+                className="size-14 rounded-xl"
+                src={task.coverImageUrl}
+              />
               <span className="min-w-0 flex-1">
                 <strong className="block truncate text-[15px]">
                   {task.title}
@@ -227,7 +234,12 @@ export function GeneratePage() {
     Number.isInteger(presetTaskId) && presetTaskId > 0 ? presetTaskId : null,
   );
   const [materialIds, setMaterialIds] = useState<number[]>([]);
-  const [platform, setPlatform] = useState<ReviewPlatform>("xiaohongshu");
+  const presetPlatform = searchParams.get("platform");
+  const [platform, setPlatform] = useState<ReviewPlatform>(
+    presetPlatform && platformValues.has(presetPlatform as ReviewPlatform)
+      ? (presetPlatform as ReviewPlatform)
+      : "xiaohongshu",
+  );
   const [style, setStyle] = useState<ReviewStyle>("real_daily");
   const [wordCount, setWordCount] = useState(80);
   const [content, setContent] = useState<string | null>(null);
@@ -317,7 +329,7 @@ export function GeneratePage() {
         </div>
         {selectedTask ? (
           <div className="mt-3 flex gap-3">
-            <PlaceholderImage />
+            <PlaceholderImage src={selectedTask.coverImageUrl} />
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
                 <h4 className="truncate font-bold">{selectedTask.title}</h4>
@@ -424,7 +436,7 @@ export function GeneratePage() {
 
       <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
         <SectionTitle>评论风格</SectionTitle>
-        <div className="mt-3 grid grid-cols-3 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2 [&>*:nth-child(4)]:col-span-1">
           {platformOptions.map((option) => (
             <button
               className={cn(
@@ -444,6 +456,14 @@ export function GeneratePage() {
               ) : option.value === "douyin" ? (
                 <span className="flex size-4.5 items-center justify-center rounded bg-[#1b1b1b] text-[9px] font-bold text-white">
                   抖
+                </span>
+              ) : option.value === "taobao" ? (
+                <span className="flex size-4.5 items-center justify-center rounded bg-[#ff5000] text-[9px] font-bold text-white">
+                  淘
+                </span>
+              ) : option.value === "jd" ? (
+                <span className="flex size-4.5 items-center justify-center rounded bg-[#e1251b] text-[9px] font-bold text-white">
+                  京
                 </span>
               ) : (
                 option.icon

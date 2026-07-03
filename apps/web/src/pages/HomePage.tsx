@@ -84,7 +84,10 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
       to={`/tasks/${task.id}`}
     >
       <div className="flex gap-3">
-        <PlaceholderImage badge={deadlineBadgeText(task.deadline)} />
+        <PlaceholderImage
+          badge={deadlineBadgeText(task.deadline)}
+          src={task.coverImageUrl}
+        />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5">
             <span className="flex min-w-0 items-center gap-1 truncate text-[13px] text-muted-foreground">

@@ -14,6 +14,7 @@ export type TaskStep = {
   type: TaskStepType;
   title: string;
   requirement: string | null;
+  platform: string | null;
   status: StepStatus;
   resultUrl: string | null;
   resultText: string | null;
@@ -30,6 +31,7 @@ export type Task = {
   status: TaskStatus;
   cashbackAmount: number | null;
   deadline: string | null;
+  coverImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

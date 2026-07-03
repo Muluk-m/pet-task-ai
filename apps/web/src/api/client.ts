@@ -116,6 +116,13 @@ export function useUpdateTask(taskId: number) {
   });
 }
 
+export function uploadTaskCover(taskId: number, formData: FormData) {
+  return api<{ task: Task }>(`/api/tasks/${taskId}/cover`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
 export function useArchiveTask() {
   const invalidate = useInvalidateTasks();
   return useMutation({

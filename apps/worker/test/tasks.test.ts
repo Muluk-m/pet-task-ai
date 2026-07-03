@@ -210,6 +210,49 @@ describe("tasks API", () => {
     expect((await getTask(created.id)).status).toBe("active");
   });
 
+  it("creates a platform-specific review step title", async () => {
+    const res = await postJson("/api/tasks", {
+      title: "淘宝好评任务",
+      requiresReview: true,
+      reviewPlatform: "taobao",
+      requiresCashback: false,
+    });
+    expect(res.status).toBe(201);
+    const { task: created } = (await res.json()) as TaskResponse;
+
+    const task = await getTask(created.id);
+    const review = task.steps?.find((s) => s.type === "ecommerce_review");
+    expect(review).toBeDefined();
+    expect(
+      (review as unknown as { title: string; platform: string | null }).title,
+    ).toBe("提交淘宝好评");
+    expect((review as unknown as { platform: string | null }).platform).toBe(
+      "taobao",
+    );
+  });
+
+  it("uploads a task cover image to R2", async () => {
+    const created = await createFullTask();
+
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([new Uint8Array([0xff, 0xd8, 0xff, 0xdb])], "cover.jpg", {
+        type: "image/jpeg",
+      }),
+    );
+
+    const res = await request(`/api/tasks/${created.id}/cover`, {
+      method: "POST",
+      body: form,
+    });
+    expect(res.status).toBe(200);
+    const { task } = (await res.json()) as {
+      task: { coverImageUrl: string | null };
+    };
+    expect(task.coverImageUrl).toMatch(/^\/api\/materials\/assets\//);
+  });
+
   it("updates editable fields via PATCH", async () => {
     const created = await createFullTask();
 
