@@ -36,6 +36,13 @@
       "when": 1783042682981,
       "tag": "0004_chemical_vampiro",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1783045539390,
+      "tag": "0005_slim_daimon_hellstrom",
+      "breakpoints": true
     }
   ]
 }

@@ -23,7 +23,7 @@ import {
   deadlineBadgeText,
 } from "../components/bits";
 import { toast } from "../components/toast";
-import { parseDbDate } from "../lib/format";
+import { formatMoney, parseDbDate } from "../lib/format";
 import { cn } from "../lib/utils";
 
 function greeting(): string {
@@ -174,21 +174,24 @@ export function HomePage() {
 
     const now = new Date();
     let monthAmount = 0;
-    let totalAmount = 0;
+    let pendingAmount = 0;
     for (const task of all) {
-      if (task.status !== "completed") {
-        continue;
-      }
       const amount = task.cashbackAmount ?? 0;
-      totalAmount += amount;
-      if (task.completedAt) {
-        const done = parseDbDate(task.completedAt);
-        if (
-          done.getFullYear() === now.getFullYear() &&
-          done.getMonth() === now.getMonth()
-        ) {
-          monthAmount += amount;
+      if (task.status === "completed") {
+        if (task.completedAt) {
+          const done = parseDbDate(task.completedAt);
+          if (
+            done.getFullYear() === now.getFullYear() &&
+            done.getMonth() === now.getMonth()
+          ) {
+            monthAmount += amount;
+          }
         }
+      } else if (
+        task.status === "active" &&
+        task.steps.some((s) => s.type === "cashback" && s.status === "pending")
+      ) {
+        pendingAmount += amount;
       }
     }
 
@@ -197,11 +200,8 @@ export function HomePage() {
       completedTasks: completed,
       stats: {
         activeCount: all.filter((t) => t.status === "active").length,
-        waitingCashback: all.filter(
-          (t) => t.status === "active" && isWaitingCashback(t),
-        ).length,
         monthAmount,
-        totalAmount,
+        pendingAmount,
       },
     };
   }, [all, keyword, sortBy]);
@@ -277,51 +277,37 @@ export function HomePage() {
         className="mt-5 flex items-center rounded-3xl bg-card p-4 shadow-xs"
         to="/settings"
       >
-        <div className="flex flex-1 items-center gap-2.5">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-success-soft text-success">
-            <ClipboardCheck size={20} />
-          </span>
-          <span>
-            <span className="block text-xs text-muted-foreground">进行中</span>
-            <span className="text-lg font-bold">
+        <div className="grid flex-1 grid-cols-3 divide-x divide-border">
+          <div className="flex flex-col items-center gap-1 px-1">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-success-soft text-success">
+              <ClipboardCheck size={17} />
+            </span>
+            <span className="text-xs text-muted-foreground">进行中</span>
+            <span className="whitespace-nowrap text-[17px] font-bold">
               {stats.activeCount}
               <em className="ml-0.5 text-xs font-normal not-italic text-muted-foreground">
-                个任务
+                个
               </em>
             </span>
-          </span>
-        </div>
-        <div className="h-9 w-px bg-border" />
-        <div className="flex flex-1 items-center gap-2.5 pl-3">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-warning-soft text-warning">
-            <CircleDollarSign size={20} />
-          </span>
-          <span>
-            <span className="block text-xs text-muted-foreground">待返现</span>
-            <span className="text-lg font-bold">
-              {stats.waitingCashback}
-              <em className="ml-0.5 text-xs font-normal not-italic text-muted-foreground">
-                个任务
-              </em>
+          </div>
+          <div className="flex flex-col items-center gap-1 px-1">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-warning-soft text-warning">
+              <CircleDollarSign size={17} />
             </span>
-          </span>
-        </div>
-        <div className="h-9 w-px bg-border" />
-        <div className="flex flex-[1.2] items-center gap-2.5 pl-3">
-          <span className="flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">
-            <Wallet size={20} />
-          </span>
-          <span className="min-w-0">
-            <span className="block text-xs text-muted-foreground">
-              本月返现
+            <span className="text-xs text-muted-foreground">待返现</span>
+            <span className="whitespace-nowrap text-[17px] font-bold text-warning">
+              {formatMoney(stats.pendingAmount)}
             </span>
-            <span className="block truncate text-lg font-bold text-primary">
-              ¥{stats.monthAmount.toFixed(2)}
+          </div>
+          <div className="flex flex-col items-center gap-1 px-1">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
+              <Wallet size={17} />
             </span>
-            <span className="block text-[10px] text-muted-foreground">
-              累计 ¥{stats.totalAmount.toFixed(2)}
+            <span className="text-xs text-muted-foreground">本月返现</span>
+            <span className="whitespace-nowrap text-[17px] font-bold text-primary">
+              {formatMoney(stats.monthAmount)}
             </span>
-          </span>
+          </div>
         </div>
         <ChevronRight className="shrink-0 text-muted-foreground/50" size={18} />
       </Link>
@@ -393,7 +379,7 @@ export function HomePage() {
                   </span>
                   {task.cashbackAmount != null ? (
                     <span className="shrink-0 text-sm font-semibold text-success">
-                      +¥{task.cashbackAmount.toFixed(2)}
+                      +{formatMoney(task.cashbackAmount)}
                     </span>
                   ) : null}
                   <StatusPill status={task.status} />

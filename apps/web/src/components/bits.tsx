@@ -1,6 +1,7 @@
 import type { TaskStepType } from "@pet-task-ai/shared";
 import { Check, PawPrint, Star } from "lucide-react";
 import { Fragment } from "react";
+import { siTaobao, siTiktok, siXiaohongshu } from "simple-icons";
 import type { TaskStatus, TaskStep, TaskWithSteps } from "../api/types";
 import { deadlineInfo } from "../lib/format";
 import { cn } from "../lib/utils";
@@ -78,25 +79,49 @@ export function CashbackBadge({ required }: { required: boolean }) {
   );
 }
 
-export const stepChipMeta: Record<
-  TaskStepType,
-  { label: string; iconClass: string; iconText?: string }
-> = {
+type ChipMeta = {
+  label: string;
+  iconClass: string;
+  iconText?: string;
+  /** simple-icons 品牌 logo（有则优先于 iconText 渲染） */
+  brand?: { path: string };
+  /** 字标类 logo（如小红书）相对基准尺寸的放大比例 */
+  scale?: number;
+};
+
+/** 平台视觉唯一事实源：品牌色 + logo（京东未被 simple-icons 收录，退回「京」字） */
+export const platformVisuals: Record<string, ChipMeta> = {
+  xiaohongshu: {
+    label: "小红书",
+    iconClass: "bg-[#ff2442] text-white",
+    brand: siXiaohongshu,
+    scale: 1.5,
+  },
+  douyin: {
+    label: "抖音",
+    iconClass: "bg-[#1b1b1b] text-white",
+    brand: siTiktok,
+  },
+  taobao: {
+    label: "淘宝",
+    iconClass: "bg-[#e94f20] text-white",
+    brand: siTaobao,
+  },
+  jd: {
+    label: "京东",
+    iconClass: "bg-[#e1251b] text-white",
+    iconText: "京",
+  },
+};
+
+export const stepChipMeta: Record<TaskStepType, ChipMeta> = {
   delivery: {
     label: "到货",
     iconClass: "bg-secondary text-primary",
     iconText: "货",
   },
-  xiaohongshu_note: {
-    label: "小红书",
-    iconClass: "bg-[#e0342c] text-white",
-    iconText: "红",
-  },
-  douyin_post: {
-    label: "抖音",
-    iconClass: "bg-[#1b1b1b] text-white",
-    iconText: "抖",
-  },
+  xiaohongshu_note: platformVisuals.xiaohongshu,
+  douyin_post: platformVisuals.douyin,
   ecommerce_review: {
     label: "好评",
     iconClass: "bg-warning-soft text-warning",
@@ -108,59 +133,148 @@ export const stepChipMeta: Record<
   },
 };
 
-/** 首页任务卡上的步骤链条：固定展示四种内容步骤，缺失的置灰 */
-const railTypes: TaskStepType[] = [
+/** 首页任务卡上的步骤链条：只展示本任务激活的内容步骤 */
+const railOrder: TaskStepType[] = [
   "xiaohongshu_note",
   "douyin_post",
   "ecommerce_review",
   "cashback",
 ];
 
+export function stepChipDisplay(
+  step: Pick<TaskStep, "type" | "platform">,
+): ChipMeta {
+  if (step.type === "ecommerce_review" && step.platform) {
+    const chip = platformVisuals[step.platform];
+    if (chip) {
+      return chip;
+    }
+  }
+  return stepChipMeta[step.type];
+}
+
+export function BrandIcon({
+  brand,
+  size = 17,
+}: {
+  brand: { path: string };
+  size?: number;
+}) {
+  return (
+    <svg
+      aria-hidden
+      fill="currentColor"
+      height={size}
+      role="presentation"
+      viewBox="0 0 24 24"
+      width={size}
+    >
+      <path d={brand.path} />
+    </svg>
+  );
+}
+
+/** 平台图标内容（无底色容器）：给自带圆形容器的场景用，按 scale 统一放大字标 */
+export function PlatformChipIcon({
+  platform,
+  baseSize = 15,
+}: {
+  platform: string;
+  baseSize?: number;
+}) {
+  const meta = platformVisuals[platform];
+  if (!meta) {
+    return null;
+  }
+  return meta.brand ? (
+    <BrandIcon
+      brand={meta.brand}
+      size={Math.round(baseSize * (meta.scale ?? 1))}
+    />
+  ) : (
+    <>{meta.iconText}</>
+  );
+}
+
+/** 平台小方标：真实品牌 logo（京东无收录用「京」字） */
+export function PlatformBadge({
+  platform,
+  size = 18,
+}: {
+  platform: string;
+  size?: number;
+}) {
+  const meta = platformVisuals[platform];
+  if (!meta) {
+    return null;
+  }
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center overflow-hidden rounded",
+        meta.iconClass,
+      )}
+      style={{ width: size, height: size }}
+    >
+      {meta.brand ? (
+        <BrandIcon
+          brand={meta.brand}
+          size={Math.round(size * 0.62 * (meta.scale ?? 1))}
+        />
+      ) : (
+        <span className="font-bold" style={{ fontSize: size * 0.5 }}>
+          {meta.iconText}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function StepRail({ steps }: { steps: TaskStep[] }) {
-  const byType = new Map(steps.map((step) => [step.type, step]));
+  const railSteps = steps
+    .filter((step) => step.type !== "delivery")
+    .sort(
+      (a, b) =>
+        railOrder.indexOf(a.type) - railOrder.indexOf(b.type) || a.id - b.id,
+    );
 
   return (
     <div className="flex items-start">
-      {railTypes.map((type, index) => {
-        const meta = stepChipMeta[type];
-        const step = byType.get(type);
-        const state = !step
-          ? "absent"
-          : step.status === "completed"
-            ? "done"
-            : "pending";
+      {railSteps.map((step, index) => {
+        const meta = stepChipDisplay(step);
+        const done = step.status === "completed";
 
         return (
-          <Fragment key={type}>
+          <Fragment key={step.id}>
             {index > 0 ? (
               <span className="mt-4.5 w-3 shrink-0 border-t border-dashed border-border" />
             ) : null}
-            <span
-              className={cn(
-                "flex w-12 flex-col items-center gap-1",
-                state === "absent" && "opacity-35 grayscale",
-              )}
-            >
+            <span className="flex w-12 flex-col items-center gap-1">
               <span
                 className={cn(
                   "flex size-9 items-center justify-center rounded-full text-xs font-semibold ring-2",
-                  state === "done"
+                  done
                     ? "bg-success text-white ring-success/25"
                     : cn(meta.iconClass, "ring-border"),
                 )}
               >
-                {state === "done" ? (
+                {done ? (
                   <Check size={16} strokeWidth={3} />
-                ) : type === "ecommerce_review" ? (
-                  <Star size={14} fill="currentColor" strokeWidth={0} />
-                ) : (
+                ) : meta.brand ? (
+                  <BrandIcon
+                    brand={meta.brand}
+                    size={Math.round(17 * (meta.scale ?? 1))}
+                  />
+                ) : meta.iconText ? (
                   meta.iconText
+                ) : (
+                  <Star size={14} fill="currentColor" strokeWidth={0} />
                 )}
               </span>
               <span
                 className={cn(
                   "text-[11px]",
-                  state === "done" ? "text-success" : "text-muted-foreground",
+                  done ? "text-success" : "text-muted-foreground",
                 )}
               >
                 {meta.label}

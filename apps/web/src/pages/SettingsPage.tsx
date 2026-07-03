@@ -1,24 +1,34 @@
 import {
   Archive,
   Bell,
+  Camera,
+  Check,
+  KeyRound,
   LogOut,
+  Pencil,
   RotateCcw,
   UserRound,
   Wallet,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ptConfig from "../../../../pt.config.json";
 import {
+  useChangePassword,
   useLogout,
   useMe,
   usePushSubscribe,
   usePushUnsubscribe,
   useTasks,
   useUnarchiveTask,
+  useUpdateProfile,
+  useUploadAvatar,
 } from "../api/client";
 import { toast } from "../components/toast";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
-import { parseDbDate } from "../lib/format";
+import { formatMoney, parseDbDate } from "../lib/format";
 import { urlBase64ToUint8Array } from "../lib/pwa";
 
 function usePushToggle() {
@@ -87,9 +97,215 @@ function usePushToggle() {
   return { supported, enabled, toggle, busy };
 }
 
+function ProfileCard() {
+  const me = useMe();
+  const updateProfile = useUpdateProfile();
+  const uploadAvatar = useUploadAvatar();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+
+  const user = me.data;
+  if (!user) {
+    return null;
+  }
+  const shownName = user.displayName ?? user.username;
+
+  async function saveName() {
+    const name = nameDraft.trim();
+    if (!name) {
+      toast("名称不能为空", "error");
+      return;
+    }
+    try {
+      await updateProfile.mutateAsync({ displayName: name });
+      setEditingName(false);
+      toast("名称已更新");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "更新失败", "error");
+    }
+  }
+
+  async function pickAvatar(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+    try {
+      await uploadAvatar.mutateAsync(file);
+      toast("头像已更新");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "上传失败", "error");
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-3xl bg-card p-4 shadow-xs">
+      <div className="flex items-center gap-3.5">
+        <button
+          className="relative shrink-0"
+          disabled={uploadAvatar.isPending}
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <span className="flex size-16 items-center justify-center overflow-hidden rounded-full bg-secondary text-primary">
+            {user.avatarUrl ? (
+              <img
+                alt="头像"
+                className="size-full object-cover"
+                src={user.avatarUrl}
+              />
+            ) : (
+              <UserRound size={28} />
+            )}
+          </span>
+          <span className="absolute -bottom-0.5 -right-0.5 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground ring-2 ring-card">
+            <Camera size={13} />
+          </span>
+        </button>
+        <input
+          accept="image/*"
+          className="hidden"
+          ref={fileInputRef}
+          type="file"
+          onChange={(event) => {
+            pickAvatar(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
+        <div className="min-w-0 flex-1">
+          {editingName ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                autoFocus
+                className="h-9"
+                maxLength={24}
+                placeholder="输入名称"
+                value={nameDraft}
+                onChange={(event) => setNameDraft(event.target.value)}
+              />
+              <button
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"
+                disabled={updateProfile.isPending}
+                type="button"
+                onClick={saveName}
+              >
+                <Check size={16} />
+              </button>
+              <button
+                className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"
+                type="button"
+                onClick={() => setEditingName(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          ) : (
+            <p className="flex items-center gap-1.5 text-lg font-bold">
+              <span className="truncate">{shownName}</span>
+              <button
+                className="shrink-0 text-muted-foreground"
+                type="button"
+                onClick={() => {
+                  setNameDraft(shownName);
+                  setEditingName(true);
+                }}
+              >
+                <Pencil size={14} />
+              </button>
+            </p>
+          )}
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            @{user.username}
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChangePasswordCard() {
+  const changePassword = useChangePassword();
+  const [open, setOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  async function submit() {
+    if (newPassword.length < 6) {
+      toast("新密码至少 6 位", "error");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast("两次输入的新密码不一致", "error");
+      return;
+    }
+    try {
+      await changePassword.mutateAsync({ currentPassword, newPassword });
+      setOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      toast("密码已修改");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "修改失败", "error");
+    }
+  }
+
+  return (
+    <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
+      <button
+        className="flex w-full items-center gap-2.5 text-left"
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-primary">
+          <KeyRound size={18} />
+        </span>
+        <span className="flex-1">
+          <span className="block text-[15px] font-semibold">修改密码</span>
+          <span className="block text-xs text-muted-foreground">
+            修改当前账号的登录密码
+          </span>
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-3 space-y-2.5">
+          <Input
+            autoComplete="current-password"
+            placeholder="当前密码"
+            type="password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+          />
+          <Input
+            autoComplete="new-password"
+            placeholder="新密码（至少 6 位）"
+            type="password"
+            value={newPassword}
+            onChange={(event) => setNewPassword(event.target.value)}
+          />
+          <Input
+            autoComplete="new-password"
+            placeholder="确认新密码"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+          />
+          <Button
+            className="w-full rounded-xl"
+            disabled={changePassword.isPending}
+            onClick={submit}
+          >
+            {changePassword.isPending ? "提交中..." : "确认修改"}
+          </Button>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const { data } = useTasks();
-  const me = useMe();
   const logout = useLogout();
   const unarchiveTask = useUnarchiveTask();
   const push = usePushToggle();
@@ -134,15 +350,13 @@ export function SettingsPage() {
 
   return (
     <div className="px-4 pt-4 pb-32">
-      <header className="flex items-center justify-between">
+      <header>
         <h1 className="text-[26px] font-extrabold">我的</h1>
-        <span className="flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-xs">
-          <UserRound size={15} />
-          {me.data?.username}
-        </span>
       </header>
 
-      <section className="mt-4 rounded-3xl bg-card p-4 shadow-xs">
+      <ProfileCard />
+
+      <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
         <h3 className="flex items-center gap-1.5 font-semibold">
           <Wallet className="text-primary" size={17} />
           返现统计
@@ -151,19 +365,19 @@ export function SettingsPage() {
           <div className="space-y-1 px-1">
             <p className="text-xs text-muted-foreground">累计返现</p>
             <p className="text-lg font-bold text-primary">
-              ¥{stats.total.toFixed(2)}
+              {formatMoney(stats.total)}
             </p>
           </div>
           <div className="space-y-1 px-1">
             <p className="text-xs text-muted-foreground">本月返现</p>
             <p className="text-lg font-bold text-primary">
-              ¥{stats.thisMonth.toFixed(2)}
+              {formatMoney(stats.thisMonth)}
             </p>
           </div>
           <div className="space-y-1 px-1">
             <p className="text-xs text-muted-foreground">待回款</p>
             <p className="text-lg font-bold text-warning">
-              ¥{stats.pendingAmount.toFixed(2)}
+              {formatMoney(stats.pendingAmount)}
             </p>
           </div>
         </div>
@@ -191,6 +405,8 @@ export function SettingsPage() {
           />
         </div>
       </section>
+
+      <ChangePasswordCard />
 
       <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
         <h3 className="flex items-center gap-1.5 font-semibold">

@@ -1,5 +1,5 @@
-import { ClipboardList, Images, Sparkles, UserRound } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
+import { ClipboardList, Images, Plus, Sparkles, UserRound } from "lucide-react";
+import { NavLink, Outlet, useNavigate } from "react-router";
 import { cn } from "../lib/utils";
 
 const leftTabs = [
@@ -8,6 +8,7 @@ const leftTabs = [
 ] as const;
 
 const rightTabs = [
+  { to: "/generate", label: "生成", icon: Sparkles },
   { to: "/settings", label: "我的", icon: UserRound },
 ] as const;
 
@@ -39,8 +40,6 @@ function TabLink({
 
 export function AppShell() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const generateActive = location.pathname.startsWith("/generate");
 
   return (
     <div className="min-h-dvh">
@@ -48,29 +47,19 @@ export function AppShell() {
         <Outlet />
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto grid max-w-[560px] grid-cols-4 items-end px-2 pb-safe">
+        <div className="mx-auto grid max-w-[560px] grid-cols-5 items-end px-2 pb-safe">
           {leftTabs.map((tab) => (
             <TabLink key={tab.to} {...tab} />
           ))}
-          <div className="relative flex flex-col items-center pb-1.5 pt-2">
+          <div className="flex items-center justify-center">
             <button
-              className={cn(
-                "relative -top-5 flex size-14 items-center justify-center rounded-full bg-fab text-white shadow-lg shadow-fab/40 active:scale-95",
-                generateActive && "ring-4 ring-fab/25",
-              )}
+              aria-label="快速创建任务"
+              className="relative -top-4 flex size-14 items-center justify-center rounded-full bg-fab text-white shadow-lg shadow-fab/40 active:scale-95"
               type="button"
-              onClick={() => navigate("/generate")}
+              onClick={() => navigate("/ai-create")}
             >
-              <Sparkles size={24} />
+              <Plus size={28} strokeWidth={2.4} />
             </button>
-            <span
-              className={cn(
-                "-mt-4 text-[11px] text-muted-foreground",
-                generateActive && "font-medium text-fab",
-              )}
-            >
-              生成
-            </span>
           </div>
           {rightTabs.map((tab) => (
             <TabLink key={tab.to} {...tab} />

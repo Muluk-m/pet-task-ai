@@ -2,17 +2,25 @@ import type {
   AddStepInput,
   AiExtractInput,
   AiTaskExtraction,
+  ChangePasswordInput,
   CompleteStepInput,
   CreateTaskInput,
   GenerateReviewInput,
   LoginInput,
   PushSubscribeInput,
+  RegisterInput,
+  UpdateProfileInput,
   UpdateTaskInput,
 } from "@pet-task-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { GeneratedContent, Material, Task, TaskWithSteps } from "./types";
 
-export type CurrentUser = { id: number; username: string };
+export type CurrentUser = {
+  id: number;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+};
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
@@ -64,6 +72,49 @@ export function useLogin() {
       queryClient.setQueryData(["me"], data.user);
       queryClient.invalidateQueries();
     },
+  });
+}
+
+export function useRegister() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RegisterInput) =>
+      postJson<{ user: CurrentUser }>("/api/auth/register", input),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["me"], data.user);
+      queryClient.invalidateQueries();
+    },
+  });
+}
+
+export function useUpdateProfile() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProfileInput) =>
+      postJson<{ user: CurrentUser }>("/api/auth/profile", input, "PATCH"),
+    onSuccess: (data) => queryClient.setQueryData(["me"], data.user),
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: ChangePasswordInput) =>
+      postJson<{ ok: boolean }>("/api/auth/password", input),
+  });
+}
+
+export function useUploadAvatar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData();
+      form.append("file", file);
+      return api<{ user: CurrentUser }>("/api/auth/avatar", {
+        method: "POST",
+        body: form,
+      });
+    },
+    onSuccess: (data) => queryClient.setQueryData(["me"], data.user),
   });
 }
 

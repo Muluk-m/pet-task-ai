@@ -38,7 +38,7 @@ import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { deadlineInfo, formatDateTime } from "../lib/format";
+import { deadlineInfo, formatDateTime, formatMoney } from "../lib/format";
 import { cn } from "../lib/utils";
 
 const stepTitles: Record<TaskStepType, string> = {
@@ -297,7 +297,7 @@ export function TaskDetailPage() {
             返现{" "}
             <strong className="text-2xl font-extrabold text-fab">
               {task.cashbackAmount != null
-                ? `¥${task.cashbackAmount % 1 === 0 ? task.cashbackAmount : task.cashbackAmount.toFixed(2)}`
+                ? formatMoney(task.cashbackAmount)
                 : "—"}
             </strong>
           </span>
