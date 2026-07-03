@@ -1,0 +1,22 @@
+{
+  "ai": {
+    "activeProvider": "qiliangjia",
+    "providers": {
+      "qiliangjia": {
+        "baseUrl": "https://sub2api.qiliangjia.one/v1",
+        "model": "gpt-5.5",
+        "apiKeyEnv": "OPENAI_API_KEY"
+      },
+      "deepseek": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+        "apiKeyEnv": "DEEPSEEK_API_KEY"
+      }
+    }
+  },
+  "push": {
+    "vapidPublicKey": "BG8v-2Kb-NL_3egx6If5P-71-PIMvMDitZxx5HjEJfo6ubMAkkYvbm0Pf6sbInsDdUTMglxhfMeBFuN0hWLza28",
+    "vapidSubject": "mailto:maqiqian@qiliangjia.com",
+    "reminderDaysAhead": 1
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "files": {
+    "ignore": [
+      ".turbo/**",
+      "**/.turbo/**",
+      "node_modules/**",
+      "apps/**/dist/**",
+      "apps/worker/drizzle/migrations/meta/**",
+      "**/worker-configuration.d.ts",
+      "**/.wrangler/**"
+    ]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "noLabelWithoutControl": {
+          "level": "error",
+          "options": {
+            "inputComponents": ["Input", "Textarea", "Switch", "Slider"]
+          }
+        }
+      }
+    }
+  },
+  "overrides": [
+    {
+      "include": ["apps/web/src/components/ui/**"],
+      "linter": {
+        "rules": {
+          "suspicious": { "noArrayIndexKey": "off" }
+        }
+      }
+    }
+  ]
+}

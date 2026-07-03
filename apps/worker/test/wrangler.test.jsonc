@@ -1,0 +1,17 @@
+// 测试专用 wrangler 配置：不带 ASSETS/R2 绑定，避免测试依赖 web 构建产物
+{
+  "name": "pet-task-ai-test",
+  "main": "../src/index.ts",
+  "compatibility_date": "2026-07-02",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pet-task-ai-test",
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "test",
+    "AUTH_SECRET": "test-secret-not-for-production"
+  }
+}

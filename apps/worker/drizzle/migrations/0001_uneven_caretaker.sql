@@ -1,0 +1,1 @@
+ALTER TABLE `materials` ADD `asset_mime_type` text;

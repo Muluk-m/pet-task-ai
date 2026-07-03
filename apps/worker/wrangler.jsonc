@@ -1,0 +1,30 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "pet-task-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-02",
+  "assets": {
+    "directory": "../web/dist",
+    "binding": "ASSETS"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pet-task-ai",
+      "database_id": "8c81aae9-3039-4032-aaa2-5bb01a760533",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "pet-task-ai-materials"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "development"
+  },
+  "triggers": {
+    "crons": ["0 1 * * *"]
+  }
+}

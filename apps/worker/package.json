@@ -1,0 +1,30 @@
+{
+  "name": "@pet-task-ai/worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply pet-task-ai --local",
+    "db:migrate:remote": "wrangler d1 migrations apply pet-task-ai --remote"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.7.0",
+    "@pet-task-ai/db": "workspace:*",
+    "@pet-task-ai/shared": "workspace:*",
+    "drizzle-orm": "^0.44.2",
+    "hono": "^4.8.3",
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.0",
+    "@cloudflare/workers-types": "^4.20250628.0",
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.8.3",
+    "vitest": "~4.1.9",
+    "wrangler": "^4.22.0"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "pet-task-ai",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "web": "turbo run dev --filter=@pet-task-ai/web",
+    "worker": "turbo run dev --filter=@pet-task-ai/worker",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "db:generate": "pnpm --filter @pet-task-ai/worker db:generate",
+    "db:migrate:local": "pnpm --filter @pet-task-ai/worker db:migrate:local",
+    "deploy": "pnpm --filter @pet-task-ai/worker deploy"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "turbo": "^2.5.4",
+    "typescript": "^5.8.3"
+  }
+}
