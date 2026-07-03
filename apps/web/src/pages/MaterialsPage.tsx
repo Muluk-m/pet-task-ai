@@ -32,7 +32,11 @@ import {
 } from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
 import { dateGroupLabel, formatTime } from "../lib/format";
-import { copyImageToClipboard, downloadImage } from "../lib/image";
+import {
+  compressImageFile,
+  copyImageToClipboard,
+  downloadImage,
+} from "../lib/image";
 import { cn } from "../lib/utils";
 
 const typeLabels: Record<MaterialType, string> = {
@@ -254,16 +258,16 @@ function UploadSheet({
       return;
     }
 
-    const formData = new FormData();
-    formData.set("type", type);
-    formData.set("title", title.trim());
-    formData.set("content", content.trim());
-    formData.set("tags", tags);
-    if (isImageType && file) {
-      formData.set("file", file);
-    }
-
     try {
+      const formData = new FormData();
+      formData.set("type", type);
+      formData.set("title", title.trim());
+      formData.set("content", content.trim());
+      formData.set("tags", tags);
+      if (isImageType && file) {
+        formData.set("file", await compressImageFile(file));
+      }
+
       await uploadMaterial.mutateAsync(formData);
       toast("素材已保存");
       onClose();

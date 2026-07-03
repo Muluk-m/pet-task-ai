@@ -29,6 +29,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { formatMoney, parseDbDate } from "../lib/format";
+import { compressImageFile } from "../lib/image";
 import { urlBase64ToUint8Array } from "../lib/pwa";
 
 function usePushToggle() {
@@ -131,7 +132,8 @@ function ProfileCard() {
       return;
     }
     try {
-      await uploadAvatar.mutateAsync(file);
+      // 头像展示尺寸小，压到 512px 足够
+      await uploadAvatar.mutateAsync(await compressImageFile(file, 512));
       toast("头像已更新");
     } catch (error) {
       toast(error instanceof Error ? error.message : "上传失败", "error");
