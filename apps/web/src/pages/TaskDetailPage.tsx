@@ -9,6 +9,7 @@ import {
   Copy,
   Lightbulb,
   MoreHorizontal,
+  PackageSearch,
   Pencil,
   Plus,
   RotateCcw,
@@ -222,9 +223,9 @@ export function TaskDetailPage() {
     }
   }
 
-  async function copyText(value: string) {
+  async function copyText(value: string, message = "已复制") {
     await navigator.clipboard.writeText(value);
-    toast("已复制");
+    toast(message);
   }
 
   const existingTypes = new Set(steps.map((s) => s.type));
@@ -336,6 +337,41 @@ export function TaskDetailPage() {
           size={16}
         />
       </button>
+
+      {task.trackingNo || task.note ? (
+        <div className="mt-3 space-y-2.5 rounded-3xl bg-card p-4 shadow-xs">
+          {task.trackingNo ? (
+            <div className="flex items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+                <PackageSearch size={17} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs text-muted-foreground">
+                  快递单号
+                </span>
+                <span className="block truncate text-sm font-semibold tabular-nums">
+                  {task.trackingNo}
+                </span>
+              </span>
+              <button
+                className="flex shrink-0 items-center gap-1 rounded-full bg-secondary px-3 py-1.5 text-xs font-medium text-primary active:scale-95"
+                type="button"
+                onClick={() =>
+                  copyText(task.trackingNo ?? "", "快递单号已复制")
+                }
+              >
+                <Copy size={12} />
+                复制
+              </button>
+            </div>
+          ) : null}
+          {task.note ? (
+            <p className="whitespace-pre-wrap rounded-2xl bg-muted/40 p-3 text-[13px] leading-relaxed text-muted-foreground">
+              {task.note}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       <section className="mt-4">
         {steps.map((step, index) => {

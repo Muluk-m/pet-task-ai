@@ -32,6 +32,8 @@ export type Task = {
   cashbackAmount: number | null;
   deadline: string | null;
   coverImageUrl: string | null;
+  trackingNo: string | null;
+  note: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;

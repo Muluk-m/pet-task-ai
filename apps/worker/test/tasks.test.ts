@@ -266,4 +266,34 @@ describe("tasks API", () => {
     const task = await getTask(created.id);
     expect(task.title).toBe("改名了");
   });
+
+  it("stores and clears tracking number and note", async () => {
+    const created = await createFullTask();
+
+    const res = await request(`/api/tasks/${created.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        trackingNo: "SF1234567890",
+        note: "取件码 8-8-8888，驿站在小区北门",
+      }),
+    });
+    expect(res.status).toBe(200);
+    const { task } = (await res.json()) as {
+      task: { trackingNo: string | null; note: string | null };
+    };
+    expect(task.trackingNo).toBe("SF1234567890");
+    expect(task.note).toContain("取件码");
+
+    const cleared = await request(`/api/tasks/${created.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ trackingNo: null, note: null }),
+    });
+    expect(cleared.status).toBe(200);
+    const clearedTask = (await cleared.json()) as {
+      task: { trackingNo: string | null };
+    };
+    expect(clearedTask.task.trackingNo).toBeNull();
+  });
 });

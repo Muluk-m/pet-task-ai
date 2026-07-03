@@ -36,7 +36,7 @@ export function PlaceholderImage({
         <PawPrint size={size === "lg" ? 36 : 30} strokeWidth={1.5} />
       )}
       {badge ? (
-        <span className="absolute bottom-0 left-0 rounded-tr-xl bg-black/55 px-1.5 py-0.5 text-[10px] text-white">
+        <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 text-center text-[10px] text-white">
           {badge}
         </span>
       ) : null}

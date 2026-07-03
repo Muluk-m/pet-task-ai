@@ -27,6 +27,7 @@ import {
   useUploadMaterial,
 } from "../api/client";
 import type { Material, TaskWithSteps } from "../api/types";
+import { AiWorking } from "../components/ai-working";
 import {
   PlaceholderImage,
   PlatformBadge,
@@ -592,6 +593,9 @@ export function GeneratePage() {
             {generateReview.isPending ? "AI 生成中..." : "生成文案"}
           </Button>
         )}
+        {generateReview.isPending ? (
+          <AiWorking label="AI 正在生成好评文案" />
+        ) : null}
       </section>
 
       {content ? (

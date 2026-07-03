@@ -16,7 +16,10 @@ function register(body: unknown) {
 
 describe("POST /api/auth/register", () => {
   it("creates an account and starts a session", async () => {
-    const res = await register({ username: "newbie", password: "test-password-1" });
+    const res = await register({
+      username: "newbie",
+      password: "test-password-1",
+    });
     expect(res.status).toBe(201);
     const data = (await res.json()) as { user: { username: string } };
     expect(data.user.username).toBe("newbie");
@@ -27,7 +30,10 @@ describe("POST /api/auth/register", () => {
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ username: "newbie", password: "test-password-1" }),
+        body: JSON.stringify({
+          username: "newbie",
+          password: "test-password-1",
+        }),
       },
       env,
     );
@@ -35,14 +41,23 @@ describe("POST /api/auth/register", () => {
   });
 
   it("rejects duplicate usernames", async () => {
-    const first = await register({ username: "dupe", password: "test-password-1" });
+    const first = await register({
+      username: "dupe",
+      password: "test-password-1",
+    });
     expect(first.status).toBe(201);
-    const second = await register({ username: "dupe", password: "test-password-2" });
+    const second = await register({
+      username: "dupe",
+      password: "test-password-2",
+    });
     expect(second.status).toBe(409);
   });
 
   it("supports profile update and password change with the new session", async () => {
-    const res = await register({ username: "profiler", password: "test-password-1" });
+    const res = await register({
+      username: "profiler",
+      password: "test-password-1",
+    });
     expect(res.status).toBe(201);
     const cookie = res.headers.get("set-cookie")?.split(";")[0] ?? "";
 
@@ -125,7 +140,8 @@ describe("POST /api/auth/register", () => {
       (await register({ username: "ok-name", password: "123" })).status,
     ).toBe(400);
     expect(
-      (await register({ username: "带空格 的", password: "test-password-1" })).status,
+      (await register({ username: "带空格 的", password: "test-password-1" }))
+        .status,
     ).toBe(400);
   });
 });

@@ -2,6 +2,7 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronRight,
+  CircleCheck,
   CircleDollarSign,
   ClipboardCheck,
   PawPrint,
@@ -9,7 +10,6 @@ import {
   Search,
   Sparkles,
   Store,
-  Wallet,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -23,7 +23,7 @@ import {
   deadlineBadgeText,
 } from "../components/bits";
 import { toast } from "../components/toast";
-import { formatMoney, parseDbDate } from "../lib/format";
+import { formatMoney } from "../lib/format";
 import { cn } from "../lib/utils";
 
 function greeting(): string {
@@ -172,26 +172,13 @@ export function HomePage() {
       (task) => task.status === "completed" && matches(task),
     );
 
-    const now = new Date();
-    let monthAmount = 0;
     let pendingAmount = 0;
     for (const task of all) {
-      const amount = task.cashbackAmount ?? 0;
-      if (task.status === "completed") {
-        if (task.completedAt) {
-          const done = parseDbDate(task.completedAt);
-          if (
-            done.getFullYear() === now.getFullYear() &&
-            done.getMonth() === now.getMonth()
-          ) {
-            monthAmount += amount;
-          }
-        }
-      } else if (
+      if (
         task.status === "active" &&
         task.steps.some((s) => s.type === "cashback" && s.status === "pending")
       ) {
-        pendingAmount += amount;
+        pendingAmount += task.cashbackAmount ?? 0;
       }
     }
 
@@ -200,7 +187,7 @@ export function HomePage() {
       completedTasks: completed,
       stats: {
         activeCount: all.filter((t) => t.status === "active").length,
-        monthAmount,
+        completedCount: all.filter((t) => t.status === "completed").length,
         pendingAmount,
       },
     };
@@ -291,21 +278,24 @@ export function HomePage() {
             </span>
           </div>
           <div className="flex flex-col items-center gap-1 px-1">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
+              <CircleCheck size={17} />
+            </span>
+            <span className="text-xs text-muted-foreground">已完成</span>
+            <span className="whitespace-nowrap text-[17px] font-bold">
+              {stats.completedCount}
+              <em className="ml-0.5 text-xs font-normal not-italic text-muted-foreground">
+                个
+              </em>
+            </span>
+          </div>
+          <div className="flex flex-col items-center gap-1 px-1">
             <span className="flex size-9 items-center justify-center rounded-xl bg-warning-soft text-warning">
               <CircleDollarSign size={17} />
             </span>
             <span className="text-xs text-muted-foreground">待返现</span>
             <span className="whitespace-nowrap text-[17px] font-bold text-warning">
               {formatMoney(stats.pendingAmount)}
-            </span>
-          </div>
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
-              <Wallet size={17} />
-            </span>
-            <span className="text-xs text-muted-foreground">本月返现</span>
-            <span className="whitespace-nowrap text-[17px] font-bold text-primary">
-              {formatMoney(stats.monthAmount)}
             </span>
           </div>
         </div>

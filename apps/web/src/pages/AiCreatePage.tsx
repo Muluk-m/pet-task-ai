@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { useCreateTask, useExtractTask } from "../api/client";
+import { AiWorking } from "../components/ai-working";
 import { PlatformChipIcon, platformVisuals } from "../components/bits";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
@@ -277,6 +278,8 @@ export function AiCreatePage() {
           {extractTask.isPending ? "AI 识别中..." : "开始识别"}
         </Button>
       ) : null}
+
+      {extractTask.isPending ? <AiWorking label="AI 正在识别商家规则" /> : null}
 
       {draft ? (
         <>

@@ -103,6 +103,8 @@ export const tasksRouter = new Hono<Env>()
         ruleText: input.ruleText,
         deadline: input.deadline,
         cashbackAmount: input.cashbackAmount,
+        trackingNo: input.trackingNo,
+        note: input.note,
       })
       .returning();
 

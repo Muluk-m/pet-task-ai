@@ -23,6 +23,8 @@ export const tasks = sqliteTable("tasks", {
   cashbackAmount: real("cashback_amount"),
   deadline: text("deadline"),
   coverImageUrl: text("cover_image_url"),
+  trackingNo: text("tracking_no"),
+  note: text("note"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   completedAt: text("completed_at"),
