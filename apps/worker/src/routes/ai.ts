@@ -9,16 +9,26 @@ import type * as schema from "@pet-task-ai/db/schema";
 import {
   aiExtractInputSchema,
   aiTaskExtractionSchema,
+  generateImageSchema,
   generateReviewSchema,
 } from "@pet-task-ai/shared";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { Hono } from "hono";
+import { ASSET_URL_PREFIX, putAsset } from "../lib/assets";
 import { getAiApiKey, getAiProvider } from "../lib/config";
-import { chatComplete, extractJson } from "../lib/openai";
+import {
+  chatComplete,
+  dataUrlToBlob,
+  extractJson,
+  generateImage,
+} from "../lib/openai";
 import type { ChatUserContent } from "../lib/openai";
 
 type Env = {
+  Bindings: {
+    BUCKET: R2Bucket;
+  };
   Variables: {
     db: DrizzleD1Database<typeof schema>;
     userId: number;
@@ -297,6 +307,94 @@ ${platformPrompts[input.platform]}
         .returning();
 
       return c.json({ generated: inserted[0] });
+    },
+  )
+  .post(
+    "/generate-image",
+    zValidator("json", generateImageSchema),
+    async (c) => {
+      const input = c.req.valid("json");
+      const db = c.get("db");
+      const userId = c.get("userId");
+
+      const provider = getAiProvider();
+      const apiKey = getAiApiKey(c.env);
+      if (!apiKey) {
+        return c.json(
+          { error: `未配置 AI key（环境变量 ${provider.apiKeyEnv}）` },
+          500,
+        );
+      }
+
+      // 参考图：现有图片素材（从 R2 取回）+ 现场上传的压缩 data URL
+      const references: Blob[] = [];
+      if (input.materialIds.length > 0) {
+        const rows = await db
+          .select()
+          .from(materials)
+          .where(
+            and(
+              inArray(materials.id, input.materialIds),
+              eq(materials.userId, userId),
+            ),
+          );
+        for (const row of rows) {
+          if (!row.assetUrl?.startsWith(ASSET_URL_PREFIX)) {
+            continue;
+          }
+          const key = decodeURIComponent(
+            row.assetUrl.slice(ASSET_URL_PREFIX.length),
+          );
+          const object = await c.env.BUCKET.get(key);
+          if (object) {
+            references.push(
+              new Blob([await object.arrayBuffer()], {
+                type: row.assetMimeType ?? "image/png",
+              }),
+            );
+          }
+        }
+      }
+      for (const dataUrl of input.referenceImages) {
+        references.push(dataUrlToBlob(dataUrl));
+      }
+
+      let bytes: Uint8Array;
+      try {
+        bytes = await generateImage({
+          baseUrl: provider.baseUrl,
+          apiKey,
+          prompt: input.prompt,
+          size: input.size,
+          references,
+        });
+      } catch (error) {
+        return c.json(
+          { error: error instanceof Error ? error.message : "生图失败" },
+          502,
+        );
+      }
+
+      const file = new File([bytes as BlobPart], "ai-image.png", {
+        type: "image/png",
+      });
+      const { url } = await putAsset(c.env.BUCKET, file, "ai/");
+
+      const [material] = await db
+        .insert(materials)
+        .values({
+          userId,
+          type: input.type,
+          title:
+            input.title?.trim() || `AI 生成 · ${input.prompt.slice(0, 24)}`,
+          content: input.prompt,
+          assetUrl: url,
+          assetMimeType: "image/png",
+          tags: ["ai"],
+        })
+        .returning();
+
+      return c.json({ material }, 201);
     },
   )
   .get("/generations", async (c) => {

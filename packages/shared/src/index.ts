@@ -166,6 +166,15 @@ export const aiExtractInputSchema = z
     { message: "请粘贴规则文字或上传截图" },
   );
 
+export const generateImageSchema = z.object({
+  prompt: z.string().trim().min(2, "请描述要生成的图片").max(2000),
+  materialIds: z.array(z.number().int().positive()).max(3).default([]),
+  referenceImages: z.array(imageDataUrlSchema).max(3).default([]),
+  size: z.enum(["1024x1024", "1024x1536", "1536x1024"]).default("1024x1024"),
+  type: z.enum(["pet_image", "merchant_review_image"]).default("pet_image"),
+  title: z.string().trim().max(80).optional(),
+});
+
 export const aiTaskExtractionSchema = createTaskSchema.extend({
   confidence: z.number().min(0).max(1),
   notes: z.array(z.string()).default([]),
@@ -208,3 +217,4 @@ export type AddStepInput = z.infer<typeof addStepSchema>;
 export type AiExtractInput = z.infer<typeof aiExtractInputSchema>;
 export type AiTaskExtraction = z.infer<typeof aiTaskExtractionSchema>;
 export type GenerateReviewInput = z.infer<typeof generateReviewSchema>;
+export type GenerateImageInput = z.input<typeof generateImageSchema>;

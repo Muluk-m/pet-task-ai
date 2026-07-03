@@ -5,6 +5,7 @@ import type {
   ChangePasswordInput,
   CompleteStepInput,
   CreateTaskInput,
+  GenerateImageInput,
   GenerateReviewInput,
   LoginInput,
   PushSubscribeInput,
@@ -249,6 +250,15 @@ export function useDeleteStep(taskId: number) {
         method: "DELETE",
       }),
     onSuccess: invalidate,
+  });
+}
+
+export function useGenerateImage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: GenerateImageInput) =>
+      postJson<{ material: Material }>("/api/ai/generate-image", input),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["materials"] }),
   });
 }
 

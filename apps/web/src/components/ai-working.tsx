@@ -2,7 +2,13 @@ import { Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /** AI 请求进行中的读秒卡片：闪烁图标 + 已用秒数 + 弹跳点 */
-export function AiWorking({ label }: { label: string }) {
+export function AiWorking({
+  label,
+  hint = "通常需要 5~20 秒",
+}: {
+  label: string;
+  hint?: string;
+}) {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
@@ -22,7 +28,7 @@ export function AiWorking({ label }: { label: string }) {
       <div className="min-w-0 flex-1">
         <p className="text-[15px] font-semibold">{label}</p>
         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-          已用时 {elapsed.toFixed(1)} 秒 · 通常需要 5~20 秒
+          已用时 {elapsed.toFixed(1)} 秒 · {hint}
         </p>
       </div>
       <span className="flex shrink-0 items-end gap-1 pb-1">
