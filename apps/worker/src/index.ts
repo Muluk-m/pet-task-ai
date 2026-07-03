@@ -51,7 +51,13 @@ app.use("/api/*", async (c, next) => {
 // 鉴权：除 health / auth 外的所有 API 都需要登录态
 app.use("/api/*", async (c, next) => {
   const path = new URL(c.req.url).pathname;
-  if (path === "/api/health" || path.startsWith("/api/auth/")) {
+  if (
+    path === "/api/health" ||
+    path.startsWith("/api/auth/") ||
+    // R2 资产：key 是随机 UUID（capability URL），免登录以支持
+    // /cdn-cgi/image 回源子请求（不携带 cookie）与共享边缘缓存
+    path.startsWith("/api/materials/assets/")
+  ) {
     await next();
     return;
   }

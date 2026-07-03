@@ -86,6 +86,23 @@ export function copyImageToClipboard(url: string): Promise<void> {
   ]);
 }
 
+/**
+ * 缩略图 URL：自定义域名上走 Cloudflare 图片转换（/cdn-cgi/image 按需缩放 +
+ * format=auto + 边缘缓存）；localhost 与 workers.dev 不支持转换，原样返回。
+ */
+export function thumbnailUrl(assetUrl: string, width: number): string {
+  const host = location.hostname;
+  if (
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".workers.dev") ||
+    !assetUrl.startsWith("/")
+  ) {
+    return assetUrl;
+  }
+  return `/cdn-cgi/image/width=${width},quality=78,format=auto${assetUrl}`;
+}
+
 /** 下载图片到本地/相册（资源均为同源，直接用下载链接，不经内存中转） */
 export function downloadImage(url: string, filename: string) {
   const anchor = document.createElement("a");

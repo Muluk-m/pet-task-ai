@@ -43,6 +43,7 @@ import {
 } from "../components/ui/sheet";
 import { Slider } from "../components/ui/slider";
 import { formatDateTime, formatMoney } from "../lib/format";
+import { thumbnailUrl } from "../lib/image";
 import { cn } from "../lib/utils";
 
 const platformOptions: Array<{
@@ -188,7 +189,7 @@ function MaterialPickerSheet({
                     <img
                       alt={material.title}
                       className="size-full object-cover"
-                      src={material.assetUrl}
+                      src={thumbnailUrl(material.assetUrl, 240)}
                     />
                   ) : (
                     <span className="block size-full overflow-hidden bg-accent/60 p-2 text-[11px] leading-relaxed">

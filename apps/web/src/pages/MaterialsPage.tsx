@@ -36,6 +36,7 @@ import {
   compressImageFile,
   copyImageToClipboard,
   downloadImage,
+  thumbnailUrl,
 } from "../lib/image";
 import { cn } from "../lib/utils";
 
@@ -85,7 +86,7 @@ function MaterialCard({
             alt={material.title}
             className="aspect-square w-full object-cover"
             loading="lazy"
-            src={assetUrl}
+            src={thumbnailUrl(assetUrl, 400)}
           />
         </button>
         <button

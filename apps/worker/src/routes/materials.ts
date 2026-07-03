@@ -82,6 +82,13 @@ export const materialsRouter = new Hono<Env>()
     return c.json({ material: inserted[0] }, 201);
   })
   .get("/assets/:key", async (c) => {
+    // 边缘缓存：自定义域名上生效，workers.dev 上 cache 操作为 no-op
+    const cache = await caches.open("assets");
+    const cached = await cache.match(c.req.raw);
+    if (cached) {
+      return cached;
+    }
+
     const key = decodeURIComponent(c.req.param("key"));
     const object = await c.env.BUCKET.get(key);
 
@@ -94,7 +101,9 @@ export const materialsRouter = new Hono<Env>()
     headers.set("etag", object.httpEtag);
     headers.set("cache-control", "public, max-age=31536000, immutable");
 
-    return new Response(object.body, { headers });
+    const response = new Response(object.body, { headers });
+    c.executionCtx.waitUntil(cache.put(c.req.raw, response.clone()));
+    return response;
   })
   .delete("/:id", async (c) => {
     const db = c.get("db");

@@ -26,7 +26,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **数据本地一份**：TanStack Query 持久化到 localStorage（7 天），离线可查看，写操作需在线。D1 是唯一事实源。
 - 每个任务自动带「下单到货」（delivery）首步骤。
 
-**部署**：https://pet-task-ai.maqiqian0316.workers.dev （Cloudflare 账号 maqiqian0316@gmail.com）。
+**部署**：https://pet-task.nainma.online （自定义域名，图片走 /cdn-cgi/image 转换 + 边缘缓存；workers.dev 域名 https://pet-task-ai.maqiqian0316.workers.dev 仍可用但无这两项）。Cloudflare 账号 maqiqian0316@gmail.com；push main 自动 CI 部署。
 
 ## 常用命令
 
