@@ -420,10 +420,14 @@ export function MaterialsPage() {
       ))}
 
       {!isLoading && groups.length === 0 ? (
-        <div className="mt-4 flex flex-col items-center gap-3 rounded-3xl bg-card py-12 text-muted-foreground">
+        <button
+          className="mt-4 flex w-full flex-col items-center gap-3 rounded-3xl bg-card py-12 text-muted-foreground active:bg-muted"
+          type="button"
+          onClick={() => setUploadType("pet_image")}
+        >
           <Camera size={32} strokeWidth={1.4} />
-          <p className="text-sm">还没有素材，拍一张宠物照片开始吧</p>
-        </div>
+          <p className="text-sm">还没有素材，点击上传一张宠物照片吧</p>
+        </button>
       ) : null}
 
       <button

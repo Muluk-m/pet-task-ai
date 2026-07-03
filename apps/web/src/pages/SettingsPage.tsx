@@ -409,13 +409,20 @@ export function SettingsPage() {
       <ChangePasswordCard />
 
       <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
-        <h3 className="flex items-center gap-1.5 font-semibold">
-          <Archive className="text-primary" size={17} />
-          已归档任务
-        </h3>
-        {archivedTasks.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">暂无归档任务</p>
-        ) : (
+        <div className="flex items-center gap-2.5">
+          <span className="flex size-10 items-center justify-center rounded-2xl bg-secondary text-primary">
+            <Archive size={18} />
+          </span>
+          <div>
+            <p className="text-[15px] font-semibold">已归档任务</p>
+            <p className="text-xs text-muted-foreground">
+              {archivedTasks.length === 0
+                ? "暂无归档任务"
+                : `${archivedTasks.length} 个任务已归档，可随时恢复`}
+            </p>
+          </div>
+        </div>
+        {archivedTasks.length === 0 ? null : (
           <div className="mt-2 divide-y divide-border/60">
             {archivedTasks.map((task) => (
               <div

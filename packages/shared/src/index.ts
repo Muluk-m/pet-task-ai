@@ -94,6 +94,8 @@ export const createTaskSchema = z.object({
   douyinRequirement: z.string().optional(),
   reviewRequirement: z.string().optional(),
   reviewPlatform: ecommercePlatformSchema.optional(),
+  trackingNo: z.string().max(64).optional(),
+  note: z.string().max(2000).optional(),
 });
 
 export const updateTaskSchema = z.object({
@@ -103,6 +105,8 @@ export const updateTaskSchema = z.object({
   ruleText: z.string().nullable().optional(),
   deadline: dateStringSchema.nullable().optional(),
   cashbackAmount: z.number().nonnegative().nullable().optional(),
+  trackingNo: z.string().max(64).nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
 });
 
 export const completeStepSchema = z.object({

@@ -64,6 +64,8 @@ export function TaskFormPage() {
   const [cashbackAmount, setCashbackAmount] = useState("");
   const [deadline, setDeadline] = useState("");
   const [ruleText, setRuleText] = useState("");
+  const [trackingNo, setTrackingNo] = useState("");
+  const [note, setNote] = useState("");
   const [needXhs, setNeedXhs] = useState(false);
   const [needDouyin, setNeedDouyin] = useState(false);
   const [needReview, setNeedReview] = useState(false);
@@ -85,6 +87,8 @@ export function TaskFormPage() {
       );
       setDeadline(task.deadline ?? "");
       setRuleText(task.ruleText ?? "");
+      setTrackingNo(task.trackingNo ?? "");
+      setNote(task.note ?? "");
       setExistingCover(task.coverImageUrl);
       setLoaded(true);
     }
@@ -135,6 +139,8 @@ export function TaskFormPage() {
           cashbackAmount: amount ?? null,
           deadline: deadline || null,
           ruleText: ruleText.trim() || null,
+          trackingNo: trackingNo.trim() || null,
+          note: note.trim() || null,
         });
         await submitCover(editingId);
         toast("修改已保存");
@@ -147,6 +153,8 @@ export function TaskFormPage() {
           cashbackAmount: amount,
           deadline: deadline || undefined,
           ruleText: ruleText.trim() || undefined,
+          trackingNo: trackingNo.trim() || undefined,
+          note: note.trim() || undefined,
           requiresXiaohongshu: needXhs,
           requiresDouyin: needDouyin,
           requiresReview: needReview,
@@ -262,12 +270,27 @@ export function TaskFormPage() {
               />
             </Field>
           </div>
+          <Field label="快递单号">
+            <Input
+              placeholder="到货后可在详情页一键复制"
+              value={trackingNo}
+              onChange={(event) => setTrackingNo(event.target.value)}
+            />
+          </Field>
           <Field label="商家规则原文">
             <Textarea
               placeholder="粘贴商家发的活动规则，方便随时查看"
               rows={4}
               value={ruleText}
               onChange={(event) => setRuleText(event.target.value)}
+            />
+          </Field>
+          <Field label="备注">
+            <Textarea
+              placeholder="取件码、驿站位置、商家微信等随手记"
+              rows={2}
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
             />
           </Field>
         </section>
