@@ -3,6 +3,7 @@
   "name": "pet-task-ai",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-02",
+  "routes": [{ "pattern": "pet-task.nainma.online", "custom_domain": true }],
   "assets": {
     "directory": "../web/dist",
     "binding": "ASSETS",

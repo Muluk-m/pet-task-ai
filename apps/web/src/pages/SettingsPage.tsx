@@ -29,7 +29,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
 import { formatMoney, parseDbDate } from "../lib/format";
-import { compressImageFile } from "../lib/image";
+import { compressImageFile, thumbnailUrl } from "../lib/image";
 import { urlBase64ToUint8Array } from "../lib/pwa";
 
 function usePushToggle() {
@@ -154,7 +154,7 @@ function ProfileCard() {
               <img
                 alt="头像"
                 className="size-full object-cover"
-                src={user.avatarUrl}
+                src={thumbnailUrl(user.avatarUrl, 128)}
               />
             ) : (
               <UserRound size={28} />

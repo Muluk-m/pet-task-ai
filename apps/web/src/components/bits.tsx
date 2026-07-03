@@ -5,6 +5,7 @@ import { Fragment } from "react";
 import { siTaobao, siTiktok, siXiaohongshu } from "simple-icons";
 import type { TaskStatus, TaskStep, TaskWithSteps } from "../api/types";
 import { deadlineInfo } from "../lib/format";
+import { thumbnailUrl } from "../lib/image";
 import { cn } from "../lib/utils";
 
 export function PlaceholderImage({
@@ -31,7 +32,7 @@ export function PlaceholderImage({
           alt=""
           className="size-full object-cover"
           loading="lazy"
-          src={src}
+          src={thumbnailUrl(src, 240)}
         />
       ) : (
         <PawPrint size={size === "lg" ? 36 : 30} strokeWidth={1.5} />
