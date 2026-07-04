@@ -79,8 +79,8 @@ describe("AI image queue API", () => {
     const fetchMock = mockQueueFetch();
     const res = await postJson("/api/ai/image-jobs", {
       prompt: "真实摄影感产品图",
-      provider: "openai-compat",
-      model: "gpt-image-2",
+      provider: "gemini",
+      model: "gemini-3.1-flash-image",
       size: "1024x1024",
     });
 
@@ -99,8 +99,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "方形产品图",
-      provider: "openai-compat",
-      model: "gpt-image-2",
+      provider: "gemini",
+      model: "gemini-3.1-flash-image",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };
@@ -121,8 +121,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "素材图",
-      provider: "openai-compat",
-      model: "gpt-image-2",
+      provider: "gemini",
+      model: "gemini-3.1-flash-image",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };
@@ -146,8 +146,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "可删除素材图",
-      provider: "openai-compat",
-      model: "gpt-image-2",
+      provider: "gemini",
+      model: "gemini-3.1-flash-image",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };
