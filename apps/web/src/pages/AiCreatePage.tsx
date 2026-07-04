@@ -33,6 +33,15 @@ import { Textarea } from "../components/ui/textarea";
 import { fileToCompressedDataUrl } from "../lib/image";
 import { cn } from "../lib/utils";
 
+function parseOneDecimalAmount(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!/^\d+(?:\.\d)?$/.test(trimmed)) {
+    return undefined;
+  }
+  const amount = Number(trimmed);
+  return Number.isFinite(amount) ? amount : undefined;
+}
+
 function FieldRow({
   icon,
   iconClass,
@@ -371,13 +380,11 @@ export function AiCreatePage() {
                       : ""
                   }
                   onChange={(event) => {
-                    const value = Number(event.target.value);
                     patch({
                       cashbackAmount:
-                        event.target.value.trim() !== "" &&
-                        Number.isFinite(value)
-                          ? value
-                          : undefined,
+                        event.target.value.trim() === ""
+                          ? undefined
+                          : parseOneDecimalAmount(event.target.value),
                     });
                   }}
                 />

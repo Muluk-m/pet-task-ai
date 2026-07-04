@@ -37,6 +37,15 @@ describe("createTaskSchema", () => {
       createTaskSchema.safeParse({ title: "t", cashbackAmount: -1 }).success,
     ).toBe(false);
   });
+
+  it("allows cashback amounts with one decimal place", () => {
+    expect(
+      createTaskSchema.safeParse({ title: "t", cashbackAmount: 5.8 }).success,
+    ).toBe(true);
+    expect(
+      createTaskSchema.safeParse({ title: "t", cashbackAmount: 5.88 }).success,
+    ).toBe(false);
+  });
 });
 
 describe("updateTaskSchema", () => {

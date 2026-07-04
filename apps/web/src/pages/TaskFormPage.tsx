@@ -39,6 +39,18 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return res.blob();
 }
 
+function parseCashbackAmount(value: string): number | undefined | null {
+  const trimmed = value.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  if (!/^\d+(?:\.\d)?$/.test(trimmed)) {
+    return null;
+  }
+  const amount = Number(trimmed);
+  return Number.isFinite(amount) ? amount : null;
+}
+
 export function TaskFormPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -115,10 +127,9 @@ export function TaskFormPage() {
       return;
     }
 
-    const amount =
-      cashbackAmount.trim() === "" ? undefined : Number(cashbackAmount);
-    if (amount !== undefined && (!Number.isFinite(amount) || amount < 0)) {
-      toast("返现金额格式不正确", "error");
+    const amount = parseCashbackAmount(cashbackAmount);
+    if (amount === null) {
+      toast("返现金额最多保留 1 位小数", "error");
       return;
     }
 
@@ -256,7 +267,7 @@ export function TaskFormPage() {
             <Field label="返现金额（元）">
               <Input
                 inputMode="decimal"
-                placeholder="如 18"
+                placeholder="如 5.8"
                 value={cashbackAmount}
                 onChange={(event) => setCashbackAmount(event.target.value)}
               />

@@ -119,6 +119,13 @@ const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD");
 
+const cashbackAmountSchema = z
+  .number()
+  .nonnegative()
+  .refine((value) => Number.isInteger(value * 10), {
+    message: "返现金额最多保留 1 位小数",
+  });
+
 export const createTaskSchema = z.object({
   title: z.string().min(1),
   merchantName: z.string().optional(),
@@ -129,7 +136,7 @@ export const createTaskSchema = z.object({
   requiresDouyin: z.boolean().default(false),
   requiresReview: z.boolean().default(false),
   requiresCashback: z.boolean().default(true),
-  cashbackAmount: z.number().nonnegative().optional(),
+  cashbackAmount: cashbackAmountSchema.optional(),
   xiaohongshuRequirement: z.string().optional(),
   douyinRequirement: z.string().optional(),
   reviewRequirement: z.string().optional(),
@@ -144,7 +151,7 @@ export const updateTaskSchema = z.object({
   productName: z.string().nullable().optional(),
   ruleText: z.string().nullable().optional(),
   deadline: dateStringSchema.nullable().optional(),
-  cashbackAmount: z.number().nonnegative().nullable().optional(),
+  cashbackAmount: cashbackAmountSchema.nullable().optional(),
   trackingNo: z.string().max(64).nullable().optional(),
   note: z.string().max(2000).nullable().optional(),
   orderChannel: orderChannelSchema.nullable().optional(),

@@ -6,9 +6,9 @@ export function formatCnDate(dateStr: string): string {
   return `${month}月${day}日`;
 }
 
-/** 金额展示：整数不带小数位，非整数保留两位 */
+/** 金额展示：整数不带小数位，非整数最多保留 1 位 */
 export function formatMoney(amount: number): string {
-  return `¥${Number.isInteger(amount) ? amount : amount.toFixed(2)}`;
+  return `¥${Number.isInteger(amount) ? amount : amount.toFixed(1)}`;
 }
 
 export function parseDbDate(value: string): Date {
