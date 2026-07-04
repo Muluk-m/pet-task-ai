@@ -1,0 +1,1 @@
+ALTER TABLE `generated_contents` ADD `content_mode` text DEFAULT 'review_text' NOT NULL;

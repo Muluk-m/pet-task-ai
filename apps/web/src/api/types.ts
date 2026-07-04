@@ -1,4 +1,7 @@
 import type {
+  ContentGenerationMode,
+  ImageJobStatus,
+  ImageQueueProvider,
   MaterialType,
   ReviewPlatform,
   ReviewStyle,
@@ -57,9 +60,57 @@ export type Material = {
 export type GeneratedContent = {
   id: number;
   taskId: number | null;
+  contentMode: ContentGenerationMode;
   platform: ReviewPlatform;
   style: ReviewStyle;
   wordCount: number | null;
   content: string;
   createdAt: string;
+};
+
+export type ImageQueueModel = {
+  provider: ImageQueueProvider;
+  model: string;
+  label: string;
+};
+
+export type ImageQueueConfig = {
+  enabled: boolean;
+  defaultProvider: ImageQueueProvider;
+  defaultModel: string;
+  models: ImageQueueModel[];
+};
+
+export type ImageJobResultImage = {
+  index: number;
+  mime: string;
+  revised_prompt?: string;
+  width?: number;
+  height?: number;
+};
+
+export type ImageJobResult = {
+  images?: ImageJobResultImage[];
+  actual_params?: { size?: string; quality?: string };
+  raw_image_urls?: string[];
+};
+
+export type ImageGenerationJob = {
+  id: number;
+  userId: number | null;
+  externalRequestId: string;
+  provider: ImageQueueProvider;
+  model: string;
+  prompt: string;
+  size: string;
+  quality: string | null;
+  status: ImageJobStatus;
+  errorMessage: string | null;
+  resultJson: ImageJobResult | null;
+  savedMaterialIds: number[];
+  submittedAt: number | null;
+  startedAt: number | null;
+  completedAt: number | null;
+  createdAt: string;
+  updatedAt: string;
 };

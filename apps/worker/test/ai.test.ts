@@ -1,0 +1,144 @@
+import { env } from "cloudflare:test";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { app } from "../src/index";
+
+let cookie = "";
+
+beforeAll(async () => {
+  const res = await app.request(
+    "/api/auth/login",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ username: "tester", password: "test-password" }),
+    },
+    env,
+  );
+  expect(res.status).toBe(200);
+  cookie = res.headers.get("set-cookie")?.split(";")[0] ?? "";
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function request(path: string, init: RequestInit = {}) {
+  return app.request(
+    path,
+    {
+      ...init,
+      headers: { ...(init.headers as Record<string, string>), cookie },
+    },
+    env,
+  );
+}
+
+function postJson(path: string, body: unknown, method = "POST") {
+  return request(path, {
+    method,
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+function mockQueueFetch() {
+  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.endsWith("/submit")) {
+      return Response.json({
+        request_id: "queue-request-1",
+        status: "queued",
+        submitted_at: 1000,
+      });
+    }
+    if (url.endsWith("/status")) {
+      return Response.json({
+        request_id: "queue-request-1",
+        status: "completed",
+        submitted_at: 1000,
+        started_at: 1100,
+        completed_at: 2000,
+        result: {
+          images: [{ index: 0, mime: "image/png", width: 1024, height: 1024 }],
+        },
+      });
+    }
+    if (url.endsWith("/image/0")) {
+      return new Response(new Uint8Array([137, 80, 78, 71]), {
+        headers: { "content-type": "image/png" },
+      });
+    }
+    return Response.json({ error: "unexpected_url", url }, { status: 500 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+describe("AI image queue API", () => {
+  it("submits and lists queued image jobs", async () => {
+    const fetchMock = mockQueueFetch();
+    const res = await postJson("/api/ai/image-jobs", {
+      prompt: "真实摄影感产品图",
+      provider: "openai-compat",
+      model: "gpt-image-2",
+      size: "1024x1024",
+    });
+
+    expect(res.status).toBe(201);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const { job } = (await res.json()) as { job: { status: string } };
+    expect(job.status).toBe("queued");
+
+    const list = await request("/api/ai/image-jobs");
+    expect(list.status).toBe(200);
+    const { jobs } = (await list.json()) as { jobs: Array<{ id: number }> };
+    expect(jobs.length).toBeGreaterThan(0);
+  });
+
+  it("refreshes a queued image job to completed", async () => {
+    mockQueueFetch();
+    const created = await postJson("/api/ai/image-jobs", {
+      prompt: "方形产品图",
+      provider: "openai-compat",
+      model: "gpt-image-2",
+      size: "1024x1024",
+    });
+    const { job } = (await created.json()) as { job: { id: number } };
+
+    const refreshed = await postJson(
+      `/api/ai/image-jobs/${job.id}/refresh`,
+      {},
+    );
+    expect(refreshed.status).toBe(200);
+    const data = (await refreshed.json()) as {
+      job: { status: string; resultJson: { images: unknown[] } | null };
+    };
+    expect(data.job.status).toBe("completed");
+    expect(data.job.resultJson?.images.length).toBe(1);
+  });
+
+  it("saves a completed generated image as material", async () => {
+    mockQueueFetch();
+    const created = await postJson("/api/ai/image-jobs", {
+      prompt: "素材图",
+      provider: "openai-compat",
+      model: "gpt-image-2",
+      size: "1024x1024",
+    });
+    const { job } = (await created.json()) as { job: { id: number } };
+    await postJson(`/api/ai/image-jobs/${job.id}/refresh`, {});
+
+    const saved = await postJson(`/api/ai/image-jobs/${job.id}/save`, {
+      index: 0,
+      type: "pet_image",
+      title: "AI 生成素材",
+      tags: ["AI生成"],
+    });
+    expect(saved.status).toBe(201);
+    const data = (await saved.json()) as {
+      material: { assetUrl: string; assetMimeType: string };
+    };
+    expect(data.material.assetUrl).toContain("/api/materials/assets/");
+    expect(data.material.assetMimeType).toBe("image/png");
+  });
+});

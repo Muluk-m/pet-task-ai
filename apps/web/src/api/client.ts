@@ -9,12 +9,21 @@ import type {
   GenerateReviewInput,
   LoginInput,
   PushSubscribeInput,
+  QueuedImageGenerateInput,
   RegisterInput,
+  SaveGeneratedImageInput,
   UpdateProfileInput,
   UpdateTaskInput,
 } from "@pet-task-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { GeneratedContent, Material, Task, TaskWithSteps } from "./types";
+import type {
+  GeneratedContent,
+  ImageGenerationJob,
+  ImageQueueConfig,
+  Material,
+  Task,
+  TaskWithSteps,
+} from "./types";
 
 export type CurrentUser = {
   id: number;
@@ -258,6 +267,78 @@ export function useGenerateImage() {
   return useMutation({
     mutationFn: (input: GenerateImageInput) =>
       postJson<{ image: string }>("/api/ai/generate-image", input),
+  });
+}
+
+export function useImageQueueConfig() {
+  return useQuery({
+    queryKey: ["image-queue-config"],
+    queryFn: () => api<ImageQueueConfig>("/api/ai/image-queue-config"),
+  });
+}
+
+export function useImageJobs() {
+  return useQuery({
+    queryKey: ["image-jobs"],
+    queryFn: () => api<{ jobs: ImageGenerationJob[] }>("/api/ai/image-jobs"),
+    refetchInterval: (query) => {
+      const jobs = query.state.data?.jobs ?? [];
+      return jobs.some((job) => ["queued", "in_progress"].includes(job.status))
+        ? 5000
+        : false;
+    },
+  });
+}
+
+export function useSubmitImageJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: QueuedImageGenerateInput) =>
+      postJson<{ job: ImageGenerationJob }>("/api/ai/image-jobs", input),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["image-jobs"] }),
+  });
+}
+
+export function useRefreshImageJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      postJson<{ job: ImageGenerationJob }>(
+        `/api/ai/image-jobs/${id}/refresh`,
+        {},
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["image-jobs"] }),
+  });
+}
+
+export function useCancelImageJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      postJson<{ job: ImageGenerationJob }>(
+        `/api/ai/image-jobs/${id}/cancel`,
+        {},
+        "PUT",
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["image-jobs"] }),
+  });
+}
+
+export function useSaveGeneratedImage(jobId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: SaveGeneratedImageInput) =>
+      postJson<{ material: Material }>(
+        `/api/ai/image-jobs/${jobId}/save`,
+        input,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["image-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["materials"] });
+    },
   });
 }
 

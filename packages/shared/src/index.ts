@@ -98,6 +98,23 @@ export const reviewStyleSchema = z.enum([
   "short_praise",
 ]);
 
+export const contentGenerationModeSchema = z.enum([
+  "review_text",
+  "xiaohongshu_publish",
+]);
+
+export const xiaohongshuPublishPayloadSchema = z.object({
+  title: z.string().trim().min(1).max(60),
+  body: z.string().trim().min(1).max(2000),
+  hashtags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
+  coverSuggestion: z.string().trim().max(200).optional(),
+  imageNotes: z.array(z.string().trim().min(1).max(200)).max(8).default([]),
+  complianceNotes: z
+    .array(z.string().trim().min(1).max(200))
+    .max(8)
+    .default([]),
+});
+
 const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD");
@@ -173,17 +190,43 @@ export const generateImageSchema = z.object({
   size: z.enum(["1024x1024", "1024x1536", "1536x1024"]).default("1024x1024"),
 });
 
+export const imageQueueProviderSchema = z.enum(["openai-compat", "gemini"]);
+
+export const imageJobStatusSchema = z.enum([
+  "queued",
+  "in_progress",
+  "completed",
+  "failed",
+  "cancelled",
+]);
+
+export const queuedImageGenerateSchema = generateImageSchema.extend({
+  provider: imageQueueProviderSchema.default("openai-compat"),
+  model: z.string().trim().min(1).max(120).default("gpt-image-2"),
+  quality: z.enum(["auto", "low", "medium", "high"]).default("medium"),
+  n: z.number().int().min(1).max(4).default(1),
+});
+
+export const saveGeneratedImageSchema = z.object({
+  index: z.number().int().min(0),
+  type: z.enum(["pet_image", "merchant_review_image"]).default("pet_image"),
+  title: z.string().trim().min(1).max(80),
+  tags: z.array(z.string().trim().min(1).max(24)).max(12).default([]),
+});
+
 export const aiTaskExtractionSchema = createTaskSchema.extend({
   confidence: z.number().min(0).max(1),
   notes: z.array(z.string()).default([]),
 });
 
 export const generateReviewSchema = z.object({
+  mode: contentGenerationModeSchema.default("review_text"),
   taskId: z.number().int().positive().optional(),
   materialIds: z.array(z.number().int().positive()).default([]),
   platform: reviewPlatformSchema,
   style: reviewStyleSchema,
   wordCount: z.number().int().min(20).max(500),
+  customRequirement: z.string().trim().max(1000).optional(),
 });
 
 export const stepTypeTitles: Record<
@@ -208,6 +251,10 @@ export type ReviewPlatform = z.infer<typeof reviewPlatformSchema>;
 export type OrderChannel = z.infer<typeof orderChannelSchema>;
 export type ReorderStepsInput = z.infer<typeof reorderStepsSchema>;
 export type ReviewStyle = z.infer<typeof reviewStyleSchema>;
+export type ContentGenerationMode = z.infer<typeof contentGenerationModeSchema>;
+export type XiaohongshuPublishPayload = z.infer<
+  typeof xiaohongshuPublishPayloadSchema
+>;
 export type CreateTaskInput = z.infer<typeof createTaskSchema>;
 export type UpdateTaskInput = z.infer<typeof updateTaskSchema>;
 export type CompleteStepInput = z.infer<typeof completeStepSchema>;
@@ -216,3 +263,9 @@ export type AiExtractInput = z.infer<typeof aiExtractInputSchema>;
 export type AiTaskExtraction = z.infer<typeof aiTaskExtractionSchema>;
 export type GenerateReviewInput = z.infer<typeof generateReviewSchema>;
 export type GenerateImageInput = z.input<typeof generateImageSchema>;
+export type QueuedImageGenerateInput = z.input<
+  typeof queuedImageGenerateSchema
+>;
+export type SaveGeneratedImageInput = z.infer<typeof saveGeneratedImageSchema>;
+export type ImageJobStatus = z.infer<typeof imageJobStatusSchema>;
+export type ImageQueueProvider = z.infer<typeof imageQueueProviderSchema>;

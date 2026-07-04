@@ -12,6 +12,7 @@ import { setupPwa } from "./lib/pwa";
 import { AiCreatePage } from "./pages/AiCreatePage";
 import { GeneratePage } from "./pages/GeneratePage";
 import { HomePage } from "./pages/HomePage";
+import { ImageGeneratePage } from "./pages/ImageGeneratePage";
 import { LoginPage } from "./pages/LoginPage";
 import { MaterialsPage } from "./pages/MaterialsPage";
 import { SettingsPage } from "./pages/SettingsPage";
@@ -71,6 +72,7 @@ function AuthGate() {
           <Route index element={<HomePage />} />
           <Route path="materials" element={<MaterialsPage />} />
           <Route path="generate" element={<GeneratePage />} />
+          <Route path="image-generate" element={<ImageGeneratePage />} />
           <Route path="settings" element={<SettingsPage />} />
         </Route>
         <Route path="tasks/new" element={<TaskFormPage />} />

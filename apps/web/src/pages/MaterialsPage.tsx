@@ -9,6 +9,7 @@ import {
   PawPrint,
   Quote,
   Search,
+  Send,
   Sparkles,
   Trash2,
   Upload,
@@ -45,6 +46,7 @@ import {
   thumbnailUrl,
 } from "../lib/image";
 import { cn } from "../lib/utils";
+import { openXiaohongshuPublish } from "../lib/xiaohongshu";
 
 const typeLabels: Record<MaterialType, string> = {
   copywriting: "文案",
@@ -80,6 +82,16 @@ async function copyMaterialText(content: string) {
     toast("已复制文案");
   } catch (error) {
     toast(error instanceof Error ? error.message : "复制失败", "error");
+  }
+}
+
+async function publishTextToXiaohongshu(content: string) {
+  try {
+    await copyText(content);
+    toast("文案已复制，请在小红书粘贴发布");
+    openXiaohongshuPublish();
+  } catch (error) {
+    toast(error instanceof Error ? error.message : "发送失败", "error");
   }
 }
 
@@ -170,7 +182,7 @@ function MaterialCard({
   }
 
   return (
-    <article className="flex flex-col rounded-2xl bg-card p-3 shadow-xs">
+    <article className="flex flex-col rounded-2xl bg-card p-3 text-left shadow-xs">
       <div className="flex items-start justify-between">
         <Quote
           className="rotate-180 text-primary/60"
@@ -195,9 +207,13 @@ function MaterialCard({
           </button>
         </div>
       </div>
-      <p className="mt-1.5 flex-1 overflow-hidden text-[13px] leading-relaxed [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]">
+      <button
+        className="mt-1.5 flex-1 overflow-hidden text-left text-[13px] leading-relaxed active:text-primary [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:6]"
+        type="button"
+        onClick={onPreview}
+      >
         {material.content}
-      </p>
+      </button>
       <div className="mt-2 flex items-center justify-between text-[11px]">
         <span
           className={cn(
@@ -564,6 +580,75 @@ function ImagePreviewOverlay({
   );
 }
 
+function TextPreviewSheet({
+  material,
+  onClose,
+  onDelete,
+}: {
+  material: Material;
+  onClose: () => void;
+  onDelete: () => void;
+}) {
+  const content = material.content ?? "";
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent
+        className="mx-auto max-w-[560px] rounded-t-3xl"
+        side="bottom"
+      >
+        <SheetHeader>
+          <SheetTitle>文案预览</SheetTitle>
+        </SheetHeader>
+        <div className="max-h-[70dvh] space-y-3 overflow-y-auto px-4 pb-6">
+          <div className="rounded-2xl bg-muted/45 p-4">
+            <div className="mb-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 font-medium",
+                  typeBadgeClass[material.type],
+                )}
+              >
+                {typeLabels[material.type]}
+              </span>
+              <time>{formatTime(material.createdAt)}</time>
+            </div>
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
+              {content}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              className="h-11 rounded-2xl"
+              variant="outline"
+              onClick={() => copyMaterialText(content)}
+            >
+              <Copy size={15} />
+              复制
+            </Button>
+            <Button
+              className="h-11 rounded-2xl"
+              onClick={() => publishTextToXiaohongshu(content)}
+            >
+              <Send size={15} />
+              小红书
+            </Button>
+            <Button
+              className="h-11 rounded-2xl text-destructive"
+              variant="outline"
+              onClick={onDelete}
+            >
+              <Trash2 size={15} />
+              删除
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function UploadSheet({
   initialType,
   onClose,
@@ -738,11 +823,13 @@ export function MaterialsPage() {
     return [...map.entries()];
   }, [data, filter, keyword]);
 
-  async function handleDelete(material: Material) {
-    if (window.confirm(`删除素材「${material.title}」？`)) {
-      await deleteMaterial.mutateAsync(material.id);
-      toast("素材已删除");
+  async function handleDelete(material: Material): Promise<boolean> {
+    if (!window.confirm(`删除素材「${material.title}」？`)) {
+      return false;
     }
+    await deleteMaterial.mutateAsync(material.id);
+    toast("素材已删除");
+    return true;
   }
 
   return (
@@ -829,18 +916,17 @@ export function MaterialsPage() {
         </div>
       </section>
 
-      <button
-        className="relative mt-3 w-full overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-[#12574d] to-[#0d443c] p-4 text-left text-white shadow-lg shadow-primary/30 active:scale-[0.99]"
-        type="button"
-        onClick={() => setAiSheetOpen(true)}
+      <Link
+        className="relative isolate mt-3 block w-full overflow-hidden rounded-3xl bg-gradient-to-br from-primary via-[#12574d] to-[#0d443c] p-4 text-left text-white shadow-lg shadow-primary/30 active:scale-[0.99]"
+        to="/image-generate"
       >
         <Sparkles
-          className="absolute -right-3 -top-4 rotate-12 text-white/10"
+          className="pointer-events-none absolute -right-3 -top-4 rotate-12 text-white/10"
           size={88}
           strokeWidth={1.5}
         />
         <PawPrint
-          className="absolute -bottom-5 right-16 -rotate-12 text-white/10"
+          className="pointer-events-none absolute -bottom-5 right-16 -rotate-12 text-white/10"
           size={56}
           strokeWidth={1.5}
         />
@@ -861,7 +947,7 @@ export function MaterialsPage() {
           </span>
           <ChevronRight className="shrink-0 text-white/60" size={18} />
         </div>
-      </button>
+      </Link>
 
       <div className="no-scrollbar mt-4 flex gap-2 overflow-x-auto">
         {filterOptions.map((option) => (
@@ -943,10 +1029,22 @@ export function MaterialsPage() {
         />
       ) : null}
 
-      {previewMaterial ? (
+      {previewMaterial?.assetUrl ? (
         <ImagePreviewOverlay
           material={previewMaterial}
           onClose={() => setPreviewMaterial(null)}
+        />
+      ) : null}
+
+      {previewMaterial && !previewMaterial.assetUrl ? (
+        <TextPreviewSheet
+          material={previewMaterial}
+          onClose={() => setPreviewMaterial(null)}
+          onDelete={async () => {
+            if (await handleDelete(previewMaterial)) {
+              setPreviewMaterial(null);
+            }
+          }}
         />
       ) : null}
 

@@ -1,0 +1,20 @@
+CREATE TABLE `image_generation_jobs` (
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`user_id` integer,
+	`external_request_id` text NOT NULL,
+	`provider` text NOT NULL,
+	`model` text NOT NULL,
+	`prompt` text NOT NULL,
+	`size` text NOT NULL,
+	`quality` text,
+	`status` text DEFAULT 'queued' NOT NULL,
+	`error_message` text,
+	`result_json` text,
+	`saved_material_ids` text DEFAULT '[]' NOT NULL,
+	`submitted_at` integer,
+	`started_at` integer,
+	`completed_at` integer,
+	`created_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	`updated_at` text DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);

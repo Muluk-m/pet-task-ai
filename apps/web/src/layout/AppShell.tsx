@@ -8,7 +8,7 @@ const leftTabs = [
 ] as const;
 
 const rightTabs = [
-  { to: "/generate", label: "生成", icon: Sparkles },
+  { to: "/generate", label: "文案", icon: Sparkles },
   { to: "/settings", label: "我的", icon: UserRound },
 ] as const;
 

@@ -14,6 +14,23 @@
       }
     }
   },
+  "imageQueue": {
+    "baseUrl": "https://image.nainma.online",
+    "defaultProvider": "gemini",
+    "defaultModel": "gemini-3.1-flash-image",
+    "models": [
+      {
+        "provider": "openai-compat",
+        "model": "gpt-image-2",
+        "label": "GPT Image 2"
+      },
+      {
+        "provider": "gemini",
+        "model": "gemini-3.1-flash-image",
+        "label": "Nano Banana 2"
+      }
+    ]
+  },
   "push": {
     "vapidPublicKey": "BG8v-2Kb-NL_3egx6If5P-71-PIMvMDitZxx5HjEJfo6ubMAkkYvbm0Pf6sbInsDdUTMglxhfMeBFuN0hWLza28",
     "vapidSubject": "mailto:maqiqian@qiliangjia.com",

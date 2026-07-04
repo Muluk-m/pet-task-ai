@@ -78,11 +78,43 @@ export const generatedContents = sqliteTable("generated_contents", {
   taskId: integer("task_id").references(() => tasks.id, {
     onDelete: "set null",
   }),
+  contentMode: text("content_mode", {
+    enum: ["review_text", "xiaohongshu_publish"],
+  })
+    .notNull()
+    .default("review_text"),
   platform: text("platform").notNull(),
   style: text("style").notNull(),
   wordCount: integer("word_count"),
   content: text("content").notNull(),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const imageGenerationJobs = sqliteTable("image_generation_jobs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").references(() => users.id),
+  externalRequestId: text("external_request_id").notNull(),
+  provider: text("provider", { enum: ["openai-compat", "gemini"] }).notNull(),
+  model: text("model").notNull(),
+  prompt: text("prompt").notNull(),
+  size: text("size").notNull(),
+  quality: text("quality"),
+  status: text("status", {
+    enum: ["queued", "in_progress", "completed", "failed", "cancelled"],
+  })
+    .notNull()
+    .default("queued"),
+  errorMessage: text("error_message"),
+  resultJson: text("result_json", { mode: "json" }).$type<unknown>(),
+  savedMaterialIds: text("saved_material_ids", { mode: "json" })
+    .$type<number[]>()
+    .notNull()
+    .default([]),
+  submittedAt: integer("submitted_at"),
+  startedAt: integer("started_at"),
+  completedAt: integer("completed_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const aiExtractionLogs = sqliteTable("ai_extraction_logs", {

@@ -5,6 +5,7 @@ import {
   createTaskSchema,
   generateReviewSchema,
   updateTaskSchema,
+  xiaohongshuPublishPayloadSchema,
 } from "./index";
 
 describe("createTaskSchema", () => {
@@ -115,7 +116,33 @@ describe("generateReviewSchema", () => {
       platform: "generic",
       style: "short_praise",
       wordCount: 100,
+      customRequirement: "  不要写猫，突出物流快  ",
     });
+    expect(parsed.mode).toBe("review_text");
     expect(parsed.materialIds).toEqual([]);
+    expect(parsed.customRequirement).toBe("不要写猫，突出物流快");
+  });
+
+  it("accepts xiaohongshu publish mode", () => {
+    const parsed = generateReviewSchema.parse({
+      mode: "xiaohongshu_publish",
+      platform: "xiaohongshu",
+      style: "seeding",
+      wordCount: 120,
+    });
+    expect(parsed.mode).toBe("xiaohongshu_publish");
+  });
+});
+
+describe("xiaohongshuPublishPayloadSchema", () => {
+  it("validates structured publishing content", () => {
+    const parsed = xiaohongshuPublishPayloadSchema.parse({
+      title: "新手也能放心用的清洁好物",
+      body: "包装很稳，味道也不冲，日常用起来挺顺手。",
+      hashtags: ["家清好物", "真实使用"],
+      imageNotes: ["首图展示产品全貌"],
+      complianceNotes: ["未提及返现"],
+    });
+    expect(parsed.hashtags).toEqual(["家清好物", "真实使用"]);
   });
 });
