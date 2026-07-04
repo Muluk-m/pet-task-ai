@@ -6,13 +6,15 @@ import {
   CircleCheck,
   CircleDollarSign,
   ClipboardCheck,
+  LayoutGrid,
+  List,
   PawPrint,
   Plus,
   Search,
   Sparkles,
   Store,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { useCompleteStep, useTasks } from "../api/client";
 import type { TaskWithSteps } from "../api/types";
@@ -54,20 +56,97 @@ const nextStepLabels: Record<string, string> = {
   cashback: "确认返现",
 };
 
+const TASK_VIEW_STORAGE_KEY = "pet-task-home-view";
+const LIST_ROW_HEIGHT = 76;
+const LIST_OVERSCAN = 8;
+
+type TaskViewMode = "card" | "list";
+
 function isWaitingCashback(task: TaskWithSteps): boolean {
   const pending = task.steps.filter((s) => s.status === "pending");
   return pending.length > 0 && pending.every((s) => s.type === "cashback");
 }
 
-function TaskCard({ task }: { task: TaskWithSteps }) {
-  const navigate = useNavigate();
-  const completeStep = useCompleteStep(task.id);
-
+function taskNextAction(task: TaskWithSteps): {
+  firstPending: TaskWithSteps["steps"][number] | undefined;
+  waitingCashback: boolean;
+  waitingDelivery: boolean;
+  hasCashback: boolean;
+} {
   const sortedSteps = [...task.steps].sort((a, b) => a.id - b.id);
   const firstPending = sortedSteps.find((s) => s.status === "pending");
-  const waitingCashback = isWaitingCashback(task);
-  const waitingDelivery = firstPending?.type === "delivery";
-  const hasCashback = task.steps.some((s) => s.type === "cashback");
+  return {
+    firstPending,
+    waitingCashback: isWaitingCashback(task),
+    waitingDelivery: firstPending?.type === "delivery",
+    hasCashback: task.steps.some((s) => s.type === "cashback"),
+  };
+}
+
+function TaskActionBadge({
+  firstPending,
+  waitingCashback,
+  waitingDelivery,
+  className,
+}: Pick<
+  ReturnType<typeof taskNextAction>,
+  "firstPending" | "waitingCashback" | "waitingDelivery"
+> & {
+  className?: string;
+}) {
+  if (waitingCashback) {
+    return (
+      <span
+        className={cn(
+          "rounded-lg bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning",
+          className,
+        )}
+      >
+        最后一步：确认返现
+      </span>
+    );
+  }
+  if (waitingDelivery) {
+    return (
+      <span
+        className={cn(
+          "rounded-lg bg-secondary px-2.5 py-1 text-xs font-medium text-primary",
+          className,
+        )}
+      >
+        待收货：到货后确认
+      </span>
+    );
+  }
+  if (firstPending) {
+    return (
+      <span
+        className={cn(
+          "rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive",
+          className,
+        )}
+      >
+        下一步：{nextStepLabels[firstPending.type]}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground",
+        className,
+      )}
+    >
+      下一步：选择任务步骤
+    </span>
+  );
+}
+
+function TaskCard({ task }: { task: TaskWithSteps }) {
+  const completeStep = useCompleteStep(task.id);
+
+  const { firstPending, waitingCashback, waitingDelivery, hasCashback } =
+    taskNextAction(task);
 
   async function quickComplete(
     event: React.MouseEvent,
@@ -123,25 +202,12 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
         </div>
       </div>
       <div className="mt-2.5 flex items-center justify-between gap-2">
-        {task.steps.length === 0 ? (
-          <span className="rounded-lg bg-muted px-2.5 py-1 text-xs text-muted-foreground">
-            下一步：选择任务步骤
-          </span>
-        ) : waitingCashback ? (
-          <span className="rounded-lg bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning">
-            最后一步：确认返现
-          </span>
-        ) : waitingDelivery ? (
-          <span className="rounded-lg bg-secondary px-2.5 py-1 text-xs font-medium text-primary">
-            待收货：到货后确认
-          </span>
-        ) : firstPending ? (
-          <span className="rounded-lg bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
-            下一步：{nextStepLabels[firstPending.type]}
-          </span>
-        ) : (
-          <span />
-        )}
+        <TaskActionBadge
+          className="max-w-full truncate text-[10px]"
+          firstPending={firstPending}
+          waitingCashback={waitingCashback}
+          waitingDelivery={waitingDelivery}
+        />
         {waitingCashback ? (
           <button
             className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground active:scale-95"
@@ -168,6 +234,112 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
   );
 }
 
+function TaskListItem({ task }: { task: TaskWithSteps }) {
+  const { firstPending, waitingCashback, waitingDelivery, hasCashback } =
+    taskNextAction(task);
+  const deadline = deadlineBadgeText(task.deadline);
+
+  return (
+    <Link
+      className="flex h-[68px] items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-3 shadow-xs active:bg-muted"
+      to={`/tasks/${task.id}`}
+    >
+      <PlaceholderImage
+        badge={deadline}
+        className="size-14 rounded-xl"
+        src={task.coverImageUrl}
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <h4 className="min-w-0 truncate text-sm font-bold">{task.title}</h4>
+          <CashbackBadge required={hasCashback} />
+        </div>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+          {task.orderChannel && platformVisuals[task.orderChannel] ? (
+            <PlatformBadge platform={task.orderChannel} size={12} />
+          ) : (
+            <Store className="shrink-0" size={12} strokeWidth={1.8} />
+          )}
+          <span className="truncate">{task.merchantName ?? "未填写商家"}</span>
+          <span className="text-border">/</span>
+          <span className="shrink-0">{deadline ?? "暂无截止"}</span>
+        </div>
+        <div className="mt-1">
+          <StepRail steps={task.steps} />
+        </div>
+      </div>
+      <div className="flex w-[88px] shrink-0 flex-col items-end gap-1">
+        {task.cashbackAmount != null ? (
+          <span className="text-xs font-bold text-warning">
+            {formatMoney(task.cashbackAmount)}
+          </span>
+        ) : null}
+        <TaskActionBadge
+          firstPending={firstPending}
+          waitingCashback={waitingCashback}
+          waitingDelivery={waitingDelivery}
+        />
+      </div>
+    </Link>
+  );
+}
+
+function VirtualTaskList({ tasks }: { tasks: TaskWithSteps[] }) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [windowState, setWindowState] = useState({ start: 0, end: 30 });
+
+  useEffect(() => {
+    function updateWindow() {
+      const element = containerRef.current;
+      if (!element) {
+        return;
+      }
+      const rect = element.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const visibleStart = Math.max(0, -rect.top);
+      const visibleEnd = Math.max(visibleStart, viewportHeight - rect.top);
+      const start = Math.max(
+        0,
+        Math.floor(visibleStart / LIST_ROW_HEIGHT) - LIST_OVERSCAN,
+      );
+      const end = Math.min(
+        tasks.length,
+        Math.ceil(visibleEnd / LIST_ROW_HEIGHT) + LIST_OVERSCAN,
+      );
+      setWindowState((current) =>
+        current.start === start && current.end === end
+          ? current
+          : { start, end },
+      );
+    }
+
+    updateWindow();
+    window.addEventListener("scroll", updateWindow, { passive: true });
+    window.addEventListener("resize", updateWindow);
+    return () => {
+      window.removeEventListener("scroll", updateWindow);
+      window.removeEventListener("resize", updateWindow);
+    };
+  }, [tasks.length]);
+
+  const visibleTasks = tasks.slice(windowState.start, windowState.end);
+  const topSpacer = windowState.start * LIST_ROW_HEIGHT;
+  const bottomSpacer =
+    Math.max(0, tasks.length - windowState.end) * LIST_ROW_HEIGHT;
+
+  return (
+    <div ref={containerRef}>
+      <div style={{ height: topSpacer }} />
+      <div className="space-y-2">
+        {visibleTasks.map((task) => (
+          <TaskListItem key={task.id} task={task} />
+        ))}
+      </div>
+      <div style={{ height: bottomSpacer }} />
+    </div>
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const { data, isLoading } = useTasks();
@@ -175,6 +347,19 @@ export function HomePage() {
   const [keyword, setKeyword] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const [taskView, setTaskView] = useState<TaskViewMode>(() => {
+    if (typeof window === "undefined") {
+      return "card";
+    }
+    return window.localStorage.getItem(TASK_VIEW_STORAGE_KEY) === "list"
+      ? "list"
+      : "card";
+  });
+
+  function updateTaskView(mode: TaskViewMode) {
+    setTaskView(mode);
+    window.localStorage.setItem(TASK_VIEW_STORAGE_KEY, mode);
+  }
 
   const all = data?.tasks ?? [];
 
@@ -271,87 +456,130 @@ export function HomePage() {
         </label>
       ) : null}
 
-      <section className="relative mt-5 overflow-hidden">
-        <h2 className="text-[32px] font-extrabold leading-tight">
-          {greeting()}
-        </h2>
-        <p className="mt-1 text-xl font-semibold">
-          今天还有{" "}
-          <span className="text-2xl font-extrabold text-fab">
-            {stats.activeCount}
-          </span>{" "}
-          个置换任务
-        </p>
+      <section className="relative mt-4 overflow-hidden rounded-3xl bg-card/70 px-4 py-3 shadow-xs">
+        <div className="relative z-10 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-2xl font-extrabold leading-tight">
+              {greeting()}
+            </h2>
+            <p className="mt-0.5 text-sm font-medium text-muted-foreground">
+              今天还有{" "}
+              <span className="text-lg font-extrabold text-fab">
+                {stats.activeCount}
+              </span>{" "}
+              个置换任务
+            </p>
+          </div>
+          <Link
+            className="shrink-0 rounded-full bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary"
+            to="/settings"
+          >
+            查看统计
+          </Link>
+        </div>
         <PawPrint
-          className="absolute -right-2 top-0 rotate-12 text-primary/10"
-          size={88}
+          className="absolute -right-1 -top-1 rotate-12 text-primary/10"
+          size={64}
           strokeWidth={1.5}
         />
       </section>
 
       <Link
-        className="mt-5 flex items-center rounded-3xl bg-card p-4 shadow-xs"
+        className="mt-3 flex items-center rounded-2xl bg-card px-3 py-2.5 shadow-xs"
         to="/settings"
       >
         <div className="grid flex-1 grid-cols-3 divide-x divide-border">
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-success-soft text-success">
-              <ClipboardCheck size={17} />
+          <div className="flex items-center justify-center gap-2 px-1">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-success-soft text-success">
+              <ClipboardCheck size={16} />
             </span>
-            <span className="text-xs text-muted-foreground">进行中</span>
-            <span className="whitespace-nowrap text-[17px] font-bold">
-              {stats.activeCount}
-              <em className="ml-0.5 text-xs font-normal not-italic text-muted-foreground">
-                个
-              </em>
-            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">进行中</p>
+              <p className="whitespace-nowrap text-sm font-bold">
+                {stats.activeCount}
+                <em className="ml-0.5 text-[11px] font-normal not-italic text-muted-foreground">
+                  个
+                </em>
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-secondary text-primary">
-              <CircleCheck size={17} />
+          <div className="flex items-center justify-center gap-2 px-1">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-secondary text-primary">
+              <CircleCheck size={16} />
             </span>
-            <span className="text-xs text-muted-foreground">已完成</span>
-            <span className="whitespace-nowrap text-[17px] font-bold">
-              {stats.completedCount}
-              <em className="ml-0.5 text-xs font-normal not-italic text-muted-foreground">
-                个
-              </em>
-            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">已完成</p>
+              <p className="whitespace-nowrap text-sm font-bold">
+                {stats.completedCount}
+                <em className="ml-0.5 text-[11px] font-normal not-italic text-muted-foreground">
+                  个
+                </em>
+              </p>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-1 px-1">
-            <span className="flex size-9 items-center justify-center rounded-xl bg-warning-soft text-warning">
-              <CircleDollarSign size={17} />
+          <div className="flex items-center justify-center gap-2 px-1">
+            <span className="flex size-8 items-center justify-center rounded-xl bg-warning-soft text-warning">
+              <CircleDollarSign size={16} />
             </span>
-            <span className="text-xs text-muted-foreground">待返现</span>
-            <span className="whitespace-nowrap text-[17px] font-bold text-warning">
-              {formatMoney(stats.pendingAmount)}
-            </span>
+            <div className="min-w-0">
+              <p className="text-[11px] text-muted-foreground">待返现</p>
+              <p className="whitespace-nowrap text-sm font-bold text-warning">
+                {formatMoney(stats.pendingAmount)}
+              </p>
+            </div>
           </div>
         </div>
-        <ChevronRight className="shrink-0 text-muted-foreground/50" size={18} />
       </Link>
 
-      <div className="mt-6 flex items-center justify-between">
+      <div className="mt-5 flex items-center justify-between gap-3">
         <h3 className="text-lg font-bold">进行中的任务</h3>
-        <button
-          className="flex items-center gap-1 text-sm text-muted-foreground"
-          type="button"
-          onClick={() =>
-            setSortBy((v) => (v === "deadline" ? "created" : "deadline"))
-          }
-        >
-          {sortBy === "deadline" ? "按截止时间" : "按创建时间"}
-          <ChevronDown size={15} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <div className="flex rounded-full bg-card p-1 shadow-xs">
+            <button
+              aria-label="卡片模式"
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full text-muted-foreground",
+                taskView === "card" && "bg-primary text-primary-foreground",
+              )}
+              type="button"
+              onClick={() => updateTaskView("card")}
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button
+              aria-label="列表模式"
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full text-muted-foreground",
+                taskView === "list" && "bg-primary text-primary-foreground",
+              )}
+              type="button"
+              onClick={() => updateTaskView("list")}
+            >
+              <List size={16} />
+            </button>
+          </div>
+          <button
+            className="flex items-center gap-1 rounded-full bg-card px-3 py-2 text-xs text-muted-foreground shadow-xs"
+            type="button"
+            onClick={() =>
+              setSortBy((v) => (v === "deadline" ? "created" : "deadline"))
+            }
+          >
+            {sortBy === "deadline" ? "截止" : "创建"}
+            <ChevronDown size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 space-y-3.5">
         {isLoading && all.length === 0 ? (
           <p className="text-center text-sm text-muted-foreground">加载中...</p>
         ) : null}
-        {activeTasks.map((task) => (
-          <TaskCard key={task.id} task={task} />
-        ))}
+        {taskView === "list" ? (
+          <VirtualTaskList tasks={activeTasks} />
+        ) : (
+          activeTasks.map((task) => <TaskCard key={task.id} task={task} />)
+        )}
         {!isLoading && activeTasks.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-3xl bg-card py-12 text-muted-foreground">
             <PawPrint size={32} strokeWidth={1.4} />
