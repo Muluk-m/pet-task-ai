@@ -279,6 +279,7 @@ export function TaskFormPage() {
             </Field>
             <Field label="截止日期">
               <MobileDateButton
+                compact
                 value={deadline}
                 onClick={() => setDeadlinePickerOpen(true)}
               />

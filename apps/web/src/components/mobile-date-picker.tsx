@@ -78,15 +78,22 @@ function buildCalendarDays(month: Date): CalendarDay[] {
 export function MobileDateButton({
   value,
   disabled = false,
+  compact = false,
   onClick,
 }: {
   value: string;
   disabled?: boolean;
+  compact?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
-      className="flex h-11 w-full min-w-0 items-center justify-between gap-2 rounded-2xl border border-input bg-card px-3 text-left text-sm shadow-xs active:bg-muted disabled:opacity-55"
+      className={cn(
+        "flex w-full min-w-0 items-center justify-between gap-2 border border-input text-left text-base active:bg-muted disabled:opacity-55 md:text-sm",
+        compact
+          ? "h-8 rounded-lg bg-transparent px-2.5 py-1"
+          : "h-11 rounded-2xl bg-card px-3 text-sm shadow-xs",
+      )}
       disabled={disabled}
       type="button"
       onClick={onClick}
