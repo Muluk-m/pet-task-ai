@@ -57,7 +57,7 @@ const nextStepLabels: Record<string, string> = {
 };
 
 const TASK_VIEW_STORAGE_KEY = "pet-task-home-view";
-const LIST_ROW_HEIGHT = 76;
+const LIST_ROW_HEIGHT = 84;
 const LIST_OVERSCAN = 8;
 
 type TaskViewMode = "card" | "list";
@@ -238,47 +238,69 @@ function TaskListItem({ task }: { task: TaskWithSteps }) {
   const { firstPending, waitingCashback, waitingDelivery, hasCashback } =
     taskNextAction(task);
   const deadline = deadlineBadgeText(task.deadline);
+  const actionLabel = waitingCashback
+    ? "待返现"
+    : waitingDelivery
+      ? "待收货"
+      : firstPending
+        ? (nextStepLabels[firstPending.type] ?? "待处理")
+        : "待处理";
 
   return (
     <Link
-      className="flex h-[68px] items-center gap-2.5 rounded-2xl border border-border/70 bg-card px-3 shadow-xs active:bg-muted"
+      className="grid h-[76px] grid-cols-[56px_minmax(0,1fr)_76px] items-center gap-2 rounded-2xl border border-border/70 bg-card px-3 shadow-xs active:bg-muted"
       to={`/tasks/${task.id}`}
     >
       <PlaceholderImage
         badge={deadline}
-        className="size-14 rounded-xl"
+        className="rounded-xl"
+        size="sm"
         src={task.coverImageUrl}
       />
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0">
         <div className="flex min-w-0 items-center gap-1.5">
-          <h4 className="min-w-0 truncate text-sm font-bold">{task.title}</h4>
+          <h4 className="min-w-0 truncate text-[15px] font-bold leading-tight">
+            {task.title}
+          </h4>
           <CashbackBadge required={hasCashback} />
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
+        <div className="mt-1 flex min-w-0 items-center gap-1 text-[11px] leading-none text-muted-foreground">
           {task.orderChannel && platformVisuals[task.orderChannel] ? (
             <PlatformBadge platform={task.orderChannel} size={12} />
           ) : (
             <Store className="shrink-0" size={12} strokeWidth={1.8} />
           )}
           <span className="truncate">{task.merchantName ?? "未填写商家"}</span>
-          <span className="text-border">/</span>
-          <span className="shrink-0">{deadline ?? "暂无截止"}</span>
+          {deadline ? (
+            <>
+              <span className="shrink-0 text-border">/</span>
+              <span className="shrink-0">{deadline}</span>
+            </>
+          ) : null}
         </div>
-        <div className="mt-1">
-          <StepRail steps={task.steps} />
-        </div>
+        <p className="mt-1 truncate text-[11px] leading-none text-muted-foreground">
+          {task.steps.filter((step) => step.status === "completed").length}/
+          {task.steps.length} 步已完成
+        </p>
       </div>
-      <div className="flex w-[88px] shrink-0 flex-col items-end gap-1">
+      <div className="flex min-w-0 flex-col items-end gap-1">
         {task.cashbackAmount != null ? (
-          <span className="text-xs font-bold text-warning">
+          <span className="max-w-full truncate text-xs font-bold text-warning">
             {formatMoney(task.cashbackAmount)}
           </span>
         ) : null}
-        <TaskActionBadge
-          firstPending={firstPending}
-          waitingCashback={waitingCashback}
-          waitingDelivery={waitingDelivery}
-        />
+        <span
+          className={cn(
+            "max-w-full truncate rounded-md px-2 py-1 text-[11px] font-medium leading-none",
+            waitingDelivery
+              ? "bg-secondary text-primary"
+              : waitingCashback
+                ? "bg-warning-soft text-warning"
+                : "bg-destructive/10 text-destructive",
+          )}
+        >
+          {actionLabel}
+        </span>
       </div>
     </Link>
   );

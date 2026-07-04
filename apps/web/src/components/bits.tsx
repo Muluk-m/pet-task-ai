@@ -14,7 +14,7 @@ export function PlaceholderImage({
   badge,
   src,
 }: {
-  size?: "md" | "lg";
+  size?: "sm" | "md" | "lg";
   className?: string;
   badge?: string | null;
   src?: string | null;
@@ -23,7 +23,7 @@ export function PlaceholderImage({
     <div
       className={cn(
         "relative flex shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-secondary text-primary/45",
-        size === "lg" ? "size-26" : "size-22",
+        size === "lg" ? "size-26" : size === "sm" ? "size-14" : "size-22",
         className,
       )}
     >
@@ -35,7 +35,10 @@ export function PlaceholderImage({
           src={thumbnailUrl(src, 240)}
         />
       ) : (
-        <PawPrint size={size === "lg" ? 36 : 30} strokeWidth={1.5} />
+        <PawPrint
+          size={size === "lg" ? 36 : size === "sm" ? 22 : 30}
+          strokeWidth={1.5}
+        />
       )}
       {badge ? (
         <span className="absolute inset-x-0 bottom-0 bg-black/55 px-1.5 py-0.5 text-center text-[10px] text-white">
