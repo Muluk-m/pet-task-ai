@@ -27,15 +27,18 @@ Configure `pt.config.json`:
 {
   "imageQueue": {
     "baseUrl": "https://image.nainma.online",
-    "defaultProvider": "gemini",
-    "defaultModel": "gemini-3.1-flash-image",
-    "models": [
-      {
-        "provider": "gemini",
-        "model": "gemini-3.1-flash-image",
-        "label": "Nano Banana 2"
+    "activeProvider": "gemini",
+    "providers": {
+      "gemini": {
+        "models": [
+          {
+            "id": "gemini-3.1-flash-image",
+            "label": "Nano Banana 2",
+            "description": "当前 image.nainma.online 队列已确认可用的 Gemini 生图模型"
+          }
+        ]
       }
-    ]
+    }
   }
 }
 ```

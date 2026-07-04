@@ -17,9 +17,13 @@ const providerSchema = z.object({
 });
 
 const imageQueueModelSchema = z.object({
-  provider: z.enum(["openai-compat", "gemini"]),
-  model: z.string().min(1),
+  id: z.string().min(1),
   label: z.string().min(1),
+  description: z.string().optional(),
+});
+
+const imageQueueProviderSchema = z.object({
+  models: z.array(imageQueueModelSchema).min(1),
 });
 
 const configSchema = z.object({
@@ -30,9 +34,11 @@ const configSchema = z.object({
   imageQueue: z
     .object({
       baseUrl: z.string().url().optional(),
-      defaultProvider: z.enum(["openai-compat", "gemini"]),
-      defaultModel: z.string().min(1),
-      models: z.array(imageQueueModelSchema).min(1),
+      activeProvider: z.enum(["openai-compat", "gemini"]),
+      providers: z.record(
+        z.enum(["openai-compat", "gemini"]),
+        imageQueueProviderSchema,
+      ),
     })
     .optional(),
   push: z.object({
@@ -52,6 +58,28 @@ export type AiModelSelection = {
   model: AiModel;
 };
 export type ImageQueueConfig = NonNullable<typeof ptConfig.imageQueue>;
+
+export function getImageQueueModels(config: ImageQueueConfig) {
+  return Object.entries(config.providers).flatMap(([providerId, provider]) =>
+    provider.models.map((model) => ({
+      provider: providerId as "openai-compat" | "gemini",
+      model: model.id,
+      label: model.label,
+      description: model.description ?? null,
+    })),
+  );
+}
+
+export function getDefaultImageQueueModel(config: ImageQueueConfig) {
+  const provider = config.providers[config.activeProvider];
+  const model = provider?.models[0];
+  return model
+    ? {
+        provider: config.activeProvider,
+        model: model.id,
+      }
+    : null;
+}
 
 export function getAiProvider(): AiProvider {
   const provider = ptConfig.ai.providers[ptConfig.ai.activeProvider];

@@ -75,6 +75,36 @@ function mockQueueFetch() {
 }
 
 describe("AI image queue API", () => {
+  it("exposes image models grouped by provider", async () => {
+    const res = await request("/api/ai/image-queue-config");
+    expect(res.status).toBe(200);
+    const data = (await res.json()) as {
+      enabled: boolean;
+      defaultProvider: string;
+      defaultModel: string;
+      providers: Array<{
+        id: string;
+        models: Array<{ id: string; model: string; label: string }>;
+      }>;
+    };
+
+    expect(data.enabled).toBe(true);
+    expect(data.defaultProvider).toBe("gemini");
+    expect(data.defaultModel).toBe("gemini-3.1-flash-image");
+    expect(data.providers).toEqual([
+      {
+        id: "gemini",
+        models: [
+          expect.objectContaining({
+            id: "gemini-3.1-flash-image",
+            model: "gemini-3.1-flash-image",
+            label: "Nano Banana 2",
+          }),
+        ],
+      },
+    ]);
+  });
+
   it("submits and lists queued image jobs", async () => {
     const fetchMock = mockQueueFetch();
     const res = await postJson("/api/ai/image-jobs", {

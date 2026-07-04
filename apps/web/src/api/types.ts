@@ -90,12 +90,19 @@ export type ImageQueueModel = {
   provider: ImageQueueProvider;
   model: string;
   label: string;
+  description: string | null;
+};
+
+export type ImageQueueProviderOption = {
+  id: ImageQueueProvider;
+  models: ImageQueueModel[];
 };
 
 export type ImageQueueConfig = {
   enabled: boolean;
   defaultProvider: ImageQueueProvider;
   defaultModel: string;
+  providers: ImageQueueProviderOption[];
   models: ImageQueueModel[];
 };
 

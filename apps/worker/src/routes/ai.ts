@@ -25,7 +25,9 @@ import {
   getAiApiKey,
   getAiModelFallbacks,
   getAiProvider,
+  getDefaultImageQueueModel,
   getImageQueueConfig,
+  getImageQueueModels,
   getPublicAiModelConfig,
 } from "../lib/config";
 import type { AiModelSelection } from "../lib/config";
@@ -721,11 +723,24 @@ ${platformPrompts[input.platform]}
   )
   .get("/image-queue-config", (c) => {
     const config = getImageQueueConfig();
+    const defaultModel = config ? getDefaultImageQueueModel(config) : null;
     return c.json({
       enabled: Boolean(config),
-      defaultProvider: config?.defaultProvider ?? "openai-compat",
-      defaultModel: config?.defaultModel ?? "gpt-image-2",
-      models: config?.models ?? [],
+      defaultProvider: defaultModel?.provider ?? "openai-compat",
+      defaultModel: defaultModel?.model ?? "gpt-image-2",
+      providers: config
+        ? Object.entries(config.providers).map(([providerId, provider]) => ({
+            id: providerId,
+            models: provider.models.map((model) => ({
+              id: model.id,
+              provider: providerId,
+              model: model.id,
+              label: model.label,
+              description: model.description ?? null,
+            })),
+          }))
+        : [],
+      models: config ? getImageQueueModels(config) : [],
     });
   })
   .get("/image-jobs", async (c) => {
@@ -753,7 +768,7 @@ ${platformPrompts[input.platform]}
       const baseUrl = rawBaseUrl.replace(/\/$/, "");
 
       const input = c.req.valid("json");
-      const allowed = config.models.some(
+      const allowed = getImageQueueModels(config).some(
         (item) =>
           item.provider === input.provider && item.model === input.model,
       );
