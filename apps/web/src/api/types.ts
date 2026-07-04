@@ -91,6 +91,8 @@ export type ImageQueueModel = {
   model: string;
   label: string;
   description: string | null;
+  channelLabel?: string;
+  capabilities?: string[];
 };
 
 export type ImageQueueProviderOption = {

@@ -94,7 +94,7 @@ export const imageGenerationJobs = sqliteTable("image_generation_jobs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("user_id").references(() => users.id),
   externalRequestId: text("external_request_id").notNull(),
-  provider: text("provider", { enum: ["openai-compat", "gemini"] }).notNull(),
+  provider: text("provider").notNull(),
   model: text("model").notNull(),
   prompt: text("prompt").notNull(),
   size: text("size").notNull(),

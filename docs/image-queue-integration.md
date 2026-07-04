@@ -11,6 +11,7 @@ the Worker.
   `imageQueue.baseUrl`
 - Default production base URL: `https://image.nainma.online`
 - External queue endpoints used by the Worker:
+  - `GET /api/channels`
   - `POST /v1/queue/{provider}/{model}/submit`
   - `GET /v1/queue/requests/{id}/status`
   - `GET /v1/queue/requests/{id}/image/{index}`
@@ -27,18 +28,20 @@ Configure `pt.config.json`:
 {
   "imageQueue": {
     "baseUrl": "https://image.nainma.online",
-    "activeProvider": "gemini",
-    "providers": {
-      "gemini": {
+    "activeChannel": "openai-images",
+    "channels": [
+      {
+        "id": "openai-images",
+        "kind": "openai-queue",
+        "label": "OpenAI",
         "models": [
           {
-            "id": "gemini-3.1-flash-image",
-            "label": "Nano Banana 2",
-            "description": "当前 image.nainma.online 队列已确认可用的 Gemini 生图模型"
+            "id": "gpt-image-2",
+            "label": "GPT Image 2"
           }
         ]
       }
-    }
+    ]
   }
 }
 ```
@@ -51,6 +54,7 @@ API keys remain owned by the `qlj-image-playground` BFF.
 1. Apply D1 migrations through the normal deployment flow.
 2. Confirm the BFF is reachable from Cloudflare Workers at
    `imageQueue.baseUrl`.
-3. Confirm configured `provider` and `model` pairs exist on the BFF.
+3. Confirm `GET /api/channels` returns the available channel/model pairs. The
+   local `pt.config.json` channel list is only a fallback.
 4. Smoke test: submit a job, refresh status to completed, open a result image,
    and save it into the materials library.

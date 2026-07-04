@@ -26,11 +26,12 @@ import {
   getAiModelFallbacks,
   getAiProvider,
   getDefaultImageQueueModel,
+  getImageQueueChannels,
   getImageQueueConfig,
   getImageQueueModels,
   getPublicAiModelConfig,
 } from "../lib/config";
-import type { AiModelSelection } from "../lib/config";
+import type { AiModelSelection, ImageQueueChannel } from "../lib/config";
 import {
   chatComplete,
   dataUrlToBlob,
@@ -73,6 +74,10 @@ type QueueStatusResponse = {
   completed_at?: number;
   error?: { message: string; type?: string };
   result?: unknown;
+};
+
+type QueueChannelsResponse = {
+  channels?: ImageQueueChannel[];
 };
 
 const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录入助手。用户会提供商家发布的活动规则——可能是文字，也可能是聊天/公告截图（或两者都有）。请仔细阅读全部文字与图片内容，提取结构化信息，仅输出一个 JSON 对象（json 格式），不要输出其他内容。
@@ -194,6 +199,50 @@ async function queueJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error(message);
   }
   return data as T;
+}
+
+function validQueueChannels(value: unknown): ImageQueueChannel[] | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const channels = (value as QueueChannelsResponse).channels;
+  if (!Array.isArray(channels)) {
+    return null;
+  }
+  const valid = channels.filter(
+    (channel) =>
+      typeof channel.id === "string" &&
+      channel.id.length > 0 &&
+      typeof channel.label === "string" &&
+      channel.label.length > 0 &&
+      Array.isArray(channel.models) &&
+      channel.models.some(
+        (model) =>
+          typeof model.id === "string" &&
+          model.id.length > 0 &&
+          typeof model.label === "string" &&
+          model.label.length > 0,
+      ),
+  );
+  return valid.length > 0 ? valid : null;
+}
+
+async function getLiveImageQueueChannels(
+  config: NonNullable<ReturnType<typeof getImageQueueConfig>>,
+  baseUrl: string,
+): Promise<ImageQueueChannel[]> {
+  const fallbackChannels = getImageQueueChannels(config);
+  try {
+    const data = await queueJson<QueueChannelsResponse>(
+      `${baseUrl}/api/channels`,
+    );
+    return validQueueChannels(data) ?? fallbackChannels;
+  } catch (error) {
+    console.warn("[image-queue] channels fetch failed, using fallback config", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return fallbackChannels;
+  }
 }
 
 function normalizeQueueStatus(value: string) {
@@ -721,26 +770,38 @@ ${platformPrompts[input.platform]}
       });
     },
   )
-  .get("/image-queue-config", (c) => {
+  .get("/image-queue-config", async (c) => {
     const config = getImageQueueConfig();
+    const rawBaseUrl = config?.baseUrl;
+    const baseUrl = rawBaseUrl?.replace(/\/$/, "");
+    const channels =
+      config && baseUrl ? await getLiveImageQueueChannels(config, baseUrl) : [];
     const defaultModel = config ? getDefaultImageQueueModel(config) : null;
+    const models = getImageQueueModels(channels);
+    const resolvedDefault =
+      models.find(
+        (item) =>
+          item.provider === defaultModel?.provider &&
+          item.model === defaultModel?.model,
+      ) ?? models[0];
     return c.json({
       enabled: Boolean(config),
-      defaultProvider: defaultModel?.provider ?? "openai-compat",
-      defaultModel: defaultModel?.model ?? "gpt-image-2",
-      providers: config
-        ? Object.entries(config.providers).map(([providerId, provider]) => ({
-            id: providerId,
-            models: provider.models.map((model) => ({
-              id: model.id,
-              provider: providerId,
-              model: model.id,
-              label: model.label,
-              description: model.description ?? null,
-            })),
-          }))
-        : [],
-      models: config ? getImageQueueModels(config) : [],
+      defaultProvider: resolvedDefault?.provider ?? "openai-images",
+      defaultModel: resolvedDefault?.model ?? "gpt-image-2",
+      providers: channels.map((channel) => ({
+        id: channel.id,
+        label: channel.label,
+        models: channel.models.map((model) => ({
+          id: model.id,
+          provider: channel.id,
+          model: model.id,
+          label: model.label,
+          description: model.description ?? null,
+          channelLabel: channel.label,
+          capabilities: model.capabilities ?? [],
+        })),
+      })),
+      models,
     });
   })
   .get("/image-jobs", async (c) => {
@@ -768,7 +829,8 @@ ${platformPrompts[input.platform]}
       const baseUrl = rawBaseUrl.replace(/\/$/, "");
 
       const input = c.req.valid("json");
-      const allowed = getImageQueueModels(config).some(
+      const channels = await getLiveImageQueueChannels(config, baseUrl);
+      const allowed = getImageQueueModels(channels).some(
         (item) =>
           item.provider === input.provider && item.model === input.model,
       );

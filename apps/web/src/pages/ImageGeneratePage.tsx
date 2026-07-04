@@ -73,11 +73,6 @@ function selectedModelValue(model: ImageQueueModel) {
   return `${model.provider}::${model.model}`;
 }
 
-const imageProviderLabels: Record<ImageQueueModel["provider"], string> = {
-  gemini: "Gemini",
-  "openai-compat": "OpenAI 兼容",
-};
-
 function resultImages(job: ImageGenerationJob): ImageJobResultImage[] {
   return job.resultJson?.images ?? [];
 }
@@ -495,9 +490,6 @@ export function ImageGeneratePage() {
       models.map((model) => ({
         value: selectedModelValue(model),
         label: model.label,
-        description:
-          model.description ??
-          `${imageProviderLabels[model.provider]} provider`,
       })),
     [models],
   );

@@ -199,7 +199,7 @@ export const generateImageSchema = z.object({
   size: z.enum(["1024x1024", "1024x1536", "1536x1024"]).default("1024x1024"),
 });
 
-export const imageQueueProviderSchema = z.enum(["openai-compat", "gemini"]);
+export const imageQueueProviderSchema = z.string().trim().min(1).max(120);
 
 export const imageJobStatusSchema = z.enum([
   "queued",
@@ -210,7 +210,7 @@ export const imageJobStatusSchema = z.enum([
 ]);
 
 export const queuedImageGenerateSchema = generateImageSchema.extend({
-  provider: imageQueueProviderSchema.default("openai-compat"),
+  provider: imageQueueProviderSchema.default("openai-images"),
   model: z.string().trim().min(1).max(120).default("gpt-image-2"),
   quality: z.enum(["auto", "low", "medium", "high"]).default("medium"),
   n: z.number().int().min(1).max(4).default(1),

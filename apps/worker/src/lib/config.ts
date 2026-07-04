@@ -20,10 +20,19 @@ const imageQueueModelSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   description: z.string().optional(),
+  capabilities: z.array(z.string().min(1)).optional(),
 });
 
 const imageQueueProviderSchema = z.object({
   models: z.array(imageQueueModelSchema).min(1),
+});
+
+const imageQueueChannelSchema = z.object({
+  id: z.string().min(1),
+  kind: z.string().optional(),
+  label: z.string().min(1),
+  models: z.array(imageQueueModelSchema).min(1),
+  defaults: z.record(z.unknown()).optional(),
 });
 
 const configSchema = z.object({
@@ -34,11 +43,10 @@ const configSchema = z.object({
   imageQueue: z
     .object({
       baseUrl: z.string().url().optional(),
-      activeProvider: z.enum(["openai-compat", "gemini"]),
-      providers: z.record(
-        z.enum(["openai-compat", "gemini"]),
-        imageQueueProviderSchema,
-      ),
+      activeChannel: z.string().min(1).optional(),
+      channels: z.array(imageQueueChannelSchema).optional(),
+      activeProvider: z.string().min(1).optional(),
+      providers: z.record(imageQueueProviderSchema).optional(),
     })
     .optional(),
   push: z.object({
@@ -58,24 +66,47 @@ export type AiModelSelection = {
   model: AiModel;
 };
 export type ImageQueueConfig = NonNullable<typeof ptConfig.imageQueue>;
+export type ImageQueueChannel = z.infer<typeof imageQueueChannelSchema>;
 
-export function getImageQueueModels(config: ImageQueueConfig) {
-  return Object.entries(config.providers).flatMap(([providerId, provider]) =>
-    provider.models.map((model) => ({
-      provider: providerId as "openai-compat" | "gemini",
+export function getImageQueueChannels(
+  config: ImageQueueConfig,
+): ImageQueueChannel[] {
+  if (config.channels?.length) {
+    return config.channels;
+  }
+  return Object.entries(config.providers ?? {}).map(
+    ([providerId, provider]) => ({
+      id: providerId,
+      label: providerId,
+      models: provider.models,
+    }),
+  );
+}
+
+export function getImageQueueModels(channels: ImageQueueChannel[]) {
+  return channels.flatMap((channel) =>
+    channel.models.map((model) => ({
+      provider: channel.id,
       model: model.id,
       label: model.label,
       description: model.description ?? null,
+      channelLabel: channel.label,
+      capabilities: model.capabilities ?? [],
     })),
   );
 }
 
 export function getDefaultImageQueueModel(config: ImageQueueConfig) {
-  const provider = config.providers[config.activeProvider];
-  const model = provider?.models[0];
+  const channels = getImageQueueChannels(config);
+  const activeChannel =
+    channels.find(
+      (channel) =>
+        channel.id === (config.activeChannel ?? config.activeProvider),
+    ) ?? channels[0];
+  const model = activeChannel?.models[0];
   return model
     ? {
-        provider: config.activeProvider,
+        provider: activeChannel.id,
         model: model.id,
       }
     : null;

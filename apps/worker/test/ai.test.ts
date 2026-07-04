@@ -44,6 +44,48 @@ function postJson(path: string, body: unknown, method = "POST") {
 function mockQueueFetch() {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    if (url.endsWith("/api/channels")) {
+      return Response.json({
+        channels: [
+          {
+            id: "openai-images",
+            kind: "openai-queue",
+            label: "OpenAI",
+            models: [
+              {
+                id: "gpt-image-2",
+                label: "GPT Image 2",
+                capabilities: ["generate", "edit", "mask", "quality"],
+              },
+            ],
+          },
+          {
+            id: "gemini-flash-image",
+            kind: "gemini-queue",
+            label: "Gemini",
+            models: [
+              {
+                id: "gemini-3.1-flash-image",
+                label: "Gemini 3.1 Flash Image",
+                capabilities: ["generate", "edit"],
+              },
+            ],
+          },
+          {
+            id: "agnes-images",
+            kind: "openai-queue",
+            label: "Agnes AI",
+            models: [
+              {
+                id: "agnes-image-2.1-flash",
+                label: "Agnes Image 2.1 Flash",
+                capabilities: ["generate", "edit"],
+              },
+            ],
+          },
+        ],
+      });
+    }
     if (url.endsWith("/submit")) {
       return Response.json({
         request_id: "queue-request-1",
@@ -75,7 +117,8 @@ function mockQueueFetch() {
 }
 
 describe("AI image queue API", () => {
-  it("exposes image models grouped by provider", async () => {
+  it("exposes image models from upstream channels", async () => {
+    mockQueueFetch();
     const res = await request("/api/ai/image-queue-config");
     expect(res.status).toBe(200);
     const data = (await res.json()) as {
@@ -89,33 +132,46 @@ describe("AI image queue API", () => {
     };
 
     expect(data.enabled).toBe(true);
-    expect(data.defaultProvider).toBe("gemini");
-    expect(data.defaultModel).toBe("gemini-3.1-flash-image");
-    expect(data.providers).toEqual([
-      {
-        id: "gemini",
-        models: [
-          expect.objectContaining({
-            id: "gemini-3.1-flash-image",
-            model: "gemini-3.1-flash-image",
-            label: "Nano Banana 2",
-          }),
-        ],
-      },
-    ]);
+    expect(data.defaultProvider).toBe("openai-images");
+    expect(data.defaultModel).toBe("gpt-image-2");
+    expect(data.providers).toContainEqual({
+      id: "openai-images",
+      label: "OpenAI",
+      models: [
+        expect.objectContaining({
+          id: "gpt-image-2",
+          model: "gpt-image-2",
+          label: "GPT Image 2",
+        }),
+      ],
+    });
+    expect(data.providers).toContainEqual({
+      id: "agnes-images",
+      label: "Agnes AI",
+      models: [
+        expect.objectContaining({
+          id: "agnes-image-2.1-flash",
+          model: "agnes-image-2.1-flash",
+          label: "Agnes Image 2.1 Flash",
+        }),
+      ],
+    });
   });
 
   it("submits and lists queued image jobs", async () => {
     const fetchMock = mockQueueFetch();
     const res = await postJson("/api/ai/image-jobs", {
       prompt: "真实摄影感产品图",
-      provider: "gemini",
-      model: "gemini-3.1-flash-image",
+      provider: "openai-images",
+      model: "gpt-image-2",
       size: "1024x1024",
     });
 
     expect(res.status).toBe(201);
-    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://image.nainma.online/v1/queue/openai-images/gpt-image-2/submit",
+      expect.objectContaining({ method: "POST" }),
+    );
     const { job } = (await res.json()) as { job: { status: string } };
     expect(job.status).toBe("queued");
 
@@ -129,8 +185,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "方形产品图",
-      provider: "gemini",
-      model: "gemini-3.1-flash-image",
+      provider: "openai-images",
+      model: "gpt-image-2",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };
@@ -151,8 +207,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "素材图",
-      provider: "gemini",
-      model: "gemini-3.1-flash-image",
+      provider: "openai-images",
+      model: "gpt-image-2",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };
@@ -176,8 +232,8 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "可删除素材图",
-      provider: "gemini",
-      model: "gemini-3.1-flash-image",
+      provider: "openai-images",
+      model: "gpt-image-2",
       size: "1024x1024",
     });
     const { job } = (await created.json()) as { job: { id: number } };

@@ -45,18 +45,57 @@
   },
   "imageQueue": {
     "baseUrl": "https://image.nainma.online",
-    "activeProvider": "gemini",
-    "providers": {
-      "gemini": {
+    "activeChannel": "openai-images",
+    "channels": [
+      {
+        "id": "openai-images",
+        "kind": "openai-queue",
+        "label": "OpenAI",
+        "models": [
+          {
+            "id": "gpt-image-2",
+            "label": "GPT Image 2",
+            "capabilities": ["generate", "edit", "mask", "quality"]
+          }
+        ],
+        "defaults": {
+          "apiMode": "images",
+          "timeout": 600
+        }
+      },
+      {
+        "id": "gemini-flash-image",
+        "kind": "gemini-queue",
+        "label": "Gemini",
         "models": [
           {
             "id": "gemini-3.1-flash-image",
-            "label": "Nano Banana 2",
-            "description": "当前 image.nainma.online 队列已确认可用的 Gemini 生图模型"
+            "label": "Gemini 3.1 Flash Image",
+            "capabilities": ["generate", "edit"]
           }
-        ]
+        ],
+        "defaults": {
+          "apiMode": "images",
+          "timeout": 600
+        }
+      },
+      {
+        "id": "agnes-images",
+        "kind": "openai-queue",
+        "label": "Agnes AI",
+        "models": [
+          {
+            "id": "agnes-image-2.1-flash",
+            "label": "Agnes Image 2.1 Flash",
+            "capabilities": ["generate", "edit"]
+          }
+        ],
+        "defaults": {
+          "apiMode": "images",
+          "timeout": 600
+        }
       }
-    }
+    ]
   },
   "push": {
     "vapidPublicKey": "BG8v-2Kb-NL_3egx6If5P-71-PIMvMDitZxx5HjEJfo6ubMAkkYvbm0Pf6sbInsDdUTMglxhfMeBFuN0hWLza28",
