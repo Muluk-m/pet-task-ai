@@ -93,6 +93,7 @@ const stylePrompts: Record<string, string> = {
   short_praise: "简短好评：直接、简洁地夸赞产品，重点突出一两个优点",
 };
 
+const TEXT_EXTRACTION_MODEL = "gpt-5.4-mini";
 const REVIEW_GENERATION_MODEL = "gpt-5.4-mini";
 
 function elapsedMs(start: number): number {
@@ -254,9 +255,11 @@ export const aiRouter = new Hono<Env>()
 
       const text = ruleText?.trim() ?? "";
       const imageUrls = images ?? [];
+      const extractionModel =
+        imageUrls.length > 0 ? provider.model : TEXT_EXTRACTION_MODEL;
       logAiTiming("extract_task_start", {
         userId,
-        model: provider.model,
+        model: extractionModel,
         textLength: text.length,
         imageCount: imageUrls.length,
       });
@@ -290,7 +293,7 @@ export const aiRouter = new Hono<Env>()
           content = await chatComplete({
             baseUrl: provider.baseUrl,
             apiKey,
-            model: provider.model,
+            model: extractionModel,
             system: extractionSystemPrompt,
             user: buildUser(attempt === 0 ? undefined : lastError),
             jsonMode: true,
@@ -298,7 +301,7 @@ export const aiRouter = new Hono<Env>()
           });
           logAiTiming("extract_task_upstream", {
             userId,
-            model: provider.model,
+            model: extractionModel,
             attempt: attempt + 1,
             durationMs: elapsedMs(upstreamStartedAt),
             outputLength: content.length,
@@ -306,7 +309,7 @@ export const aiRouter = new Hono<Env>()
         } catch (error) {
           logAiTiming("extract_task_error", {
             userId,
-            model: provider.model,
+            model: extractionModel,
             attempt: attempt + 1,
             totalMs: elapsedMs(startedAt),
             error: error instanceof Error ? error.message.slice(0, 180) : null,
@@ -345,7 +348,7 @@ export const aiRouter = new Hono<Env>()
         });
         logAiTiming("extract_task_success", {
           userId,
-          model: provider.model,
+          model: extractionModel,
           attempt: attempt + 1,
           parseMs,
           insertMs: elapsedMs(insertStartedAt),
@@ -357,7 +360,7 @@ export const aiRouter = new Hono<Env>()
 
       logAiTiming("extract_task_parse_failed", {
         userId,
-        model: provider.model,
+        model: extractionModel,
         totalMs: elapsedMs(startedAt),
         error: lastError.slice(0, 180),
       });
