@@ -132,7 +132,7 @@ describe("AI image queue API", () => {
     };
 
     expect(data.enabled).toBe(true);
-    expect(data.defaultProvider).toBe("openai-images");
+    expect(data.defaultProvider).toBe("openai-compat");
     expect(data.defaultModel).toBe("gpt-image-2");
     expect(data.providers).toContainEqual({
       id: "openai-images",
@@ -141,6 +141,8 @@ describe("AI image queue API", () => {
         expect.objectContaining({
           id: "gpt-image-2",
           model: "gpt-image-2",
+          provider: "openai-compat",
+          channelId: "openai-images",
           label: "GPT Image 2",
         }),
       ],
@@ -152,6 +154,8 @@ describe("AI image queue API", () => {
         expect.objectContaining({
           id: "agnes-image-2.1-flash",
           model: "agnes-image-2.1-flash",
+          provider: "openai-compat",
+          channelId: "agnes-images",
           label: "Agnes Image 2.1 Flash",
         }),
       ],
@@ -162,14 +166,14 @@ describe("AI image queue API", () => {
     const fetchMock = mockQueueFetch();
     const res = await postJson("/api/ai/image-jobs", {
       prompt: "真实摄影感产品图",
-      provider: "openai-images",
+      provider: "openai-compat",
       model: "gpt-image-2",
       size: "1024x1024",
     });
 
     expect(res.status).toBe(201);
     expect(fetchMock).toHaveBeenCalledWith(
-      "https://image.nainma.online/v1/queue/openai-images/gpt-image-2/submit",
+      "https://image.nainma.online/v1/queue/openai-compat/gpt-image-2/submit",
       expect.objectContaining({ method: "POST" }),
     );
     const { job } = (await res.json()) as { job: { status: string } };
@@ -185,7 +189,7 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "方形产品图",
-      provider: "openai-images",
+      provider: "openai-compat",
       model: "gpt-image-2",
       size: "1024x1024",
     });
@@ -207,7 +211,7 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "素材图",
-      provider: "openai-images",
+      provider: "openai-compat",
       model: "gpt-image-2",
       size: "1024x1024",
     });
@@ -232,7 +236,7 @@ describe("AI image queue API", () => {
     mockQueueFetch();
     const created = await postJson("/api/ai/image-jobs", {
       prompt: "可删除素材图",
-      provider: "openai-images",
+      provider: "openai-compat",
       model: "gpt-image-2",
       size: "1024x1024",
     });

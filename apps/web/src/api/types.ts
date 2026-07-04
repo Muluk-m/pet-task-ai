@@ -88,6 +88,7 @@ export type AiModelConfig = {
 
 export type ImageQueueModel = {
   provider: ImageQueueProvider;
+  channelId?: string;
   model: string;
   label: string;
   description: string | null;

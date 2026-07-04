@@ -80,6 +80,16 @@ type QueueChannelsResponse = {
   channels?: ImageQueueChannel[];
 };
 
+function toQueueProvider(kind?: string): string | null {
+  if (kind === "openai-compat" || kind === "openai-queue") {
+    return "openai-compat";
+  }
+  if (kind === "gemini" || kind === "gemini-queue") {
+    return "gemini";
+  }
+  return null;
+}
+
 const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录入助手。用户会提供商家发布的活动规则——可能是文字，也可能是聊天/公告截图（或两者都有）。请仔细阅读全部文字与图片内容，提取结构化信息，仅输出一个 JSON 对象（json 格式），不要输出其他内容。
 
 字段说明：
@@ -786,20 +796,28 @@ ${platformPrompts[input.platform]}
       ) ?? models[0];
     return c.json({
       enabled: Boolean(config),
-      defaultProvider: resolvedDefault?.provider ?? "openai-images",
+      defaultProvider: resolvedDefault?.provider ?? "openai-compat",
       defaultModel: resolvedDefault?.model ?? "gpt-image-2",
       providers: channels.map((channel) => ({
         id: channel.id,
         label: channel.label,
-        models: channel.models.map((model) => ({
-          id: model.id,
-          provider: channel.id,
-          model: model.id,
-          label: model.label,
-          description: model.description ?? null,
-          channelLabel: channel.label,
-          capabilities: model.capabilities ?? [],
-        })),
+        models: channel.models
+          .map((model) => {
+            const queueProvider = toQueueProvider(channel.kind);
+            return queueProvider
+              ? {
+                  id: model.id,
+                  provider: queueProvider,
+                  channelId: channel.id,
+                  model: model.id,
+                  label: model.label,
+                  description: model.description ?? null,
+                  channelLabel: channel.label,
+                  capabilities: model.capabilities ?? [],
+                }
+              : null;
+          })
+          .filter((model) => model !== null),
       })),
       models,
     });

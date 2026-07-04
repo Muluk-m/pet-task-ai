@@ -77,6 +77,7 @@ export function getImageQueueChannels(
   return Object.entries(config.providers ?? {}).map(
     ([providerId, provider]) => ({
       id: providerId,
+      kind: providerId,
       label: providerId,
       models: provider.models,
     }),
@@ -85,14 +86,27 @@ export function getImageQueueChannels(
 
 export function getImageQueueModels(channels: ImageQueueChannel[]) {
   return channels.flatMap((channel) =>
-    channel.models.map((model) => ({
-      provider: channel.id,
-      model: model.id,
-      label: model.label,
-      description: model.description ?? null,
-      channelLabel: channel.label,
-      capabilities: model.capabilities ?? [],
-    })),
+    channel.models
+      .map((model) => {
+        const provider =
+          channel.kind === "openai-compat" || channel.kind === "openai-queue"
+            ? "openai-compat"
+            : channel.kind === "gemini" || channel.kind === "gemini-queue"
+              ? "gemini"
+              : null;
+        return provider
+          ? {
+              provider,
+              channelId: channel.id,
+              model: model.id,
+              label: model.label,
+              description: model.description ?? null,
+              channelLabel: channel.label,
+              capabilities: model.capabilities ?? [],
+            }
+          : null;
+      })
+      .filter((model) => model !== null),
   );
 }
 
@@ -106,7 +120,11 @@ export function getDefaultImageQueueModel(config: ImageQueueConfig) {
   const model = activeChannel?.models[0];
   return model
     ? {
-        provider: activeChannel.id,
+        provider:
+          activeChannel.kind === "gemini" ||
+          activeChannel.kind === "gemini-queue"
+            ? "gemini"
+            : "openai-compat",
         model: model.id,
       }
     : null;
