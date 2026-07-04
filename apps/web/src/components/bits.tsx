@@ -88,13 +88,14 @@ type ChipMeta = {
   label: string;
   iconClass: string;
   iconText?: string;
+  logoText?: string;
   /** simple-icons 品牌 logo（有则优先于 iconText 渲染） */
   brand?: { path: string };
   /** 字标类 logo（如小红书）相对基准尺寸的放大比例 */
   scale?: number;
 };
 
-/** 平台视觉唯一事实源：品牌色 + logo（京东未被 simple-icons 收录，退回「京」字） */
+/** 平台视觉唯一事实源：品牌色 + logo */
 export const platformVisuals: Record<string, ChipMeta> = {
   xiaohongshu: {
     label: "小红书",
@@ -115,12 +116,12 @@ export const platformVisuals: Record<string, ChipMeta> = {
   jd: {
     label: "京东",
     iconClass: "bg-[#e1251b] text-white",
-    iconText: "京",
+    logoText: "JD",
   },
   pdd: {
     label: "拼多多",
     iconClass: "bg-[#e02e24] text-white",
-    iconText: "拼",
+    logoText: "PDD",
   },
 };
 
@@ -234,6 +235,13 @@ export function PlatformChipIcon({
       brand={meta.brand}
       size={Math.round(baseSize * (meta.scale ?? 1))}
     />
+  ) : meta.logoText ? (
+    <span
+      className="font-black leading-none"
+      style={{ fontSize: Math.round(baseSize * 0.5) }}
+    >
+      {meta.logoText}
+    </span>
   ) : (
     <>{meta.iconText}</>
   );
@@ -264,6 +272,13 @@ export function PlatformBadge({
           brand={meta.brand}
           size={Math.round(size * 0.62 * (meta.scale ?? 1))}
         />
+      ) : meta.logoText ? (
+        <span
+          className="font-black leading-none"
+          style={{ fontSize: Math.round(size * 0.42) }}
+        >
+          {meta.logoText}
+        </span>
       ) : (
         <span className="font-bold" style={{ fontSize: size * 0.5 }}>
           {meta.iconText}
