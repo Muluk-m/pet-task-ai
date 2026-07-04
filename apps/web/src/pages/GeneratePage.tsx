@@ -458,7 +458,16 @@ export function GeneratePage() {
     }
     await navigator.clipboard.writeText(contentText(content, contentMode));
     toast("内容已复制，请在小红书粘贴发布");
-    openXiaohongshuPublish();
+    openXiaohongshuPublish({
+      source: {
+        type: "personal",
+        ids: "",
+        extraInfo: {
+          source: "pet-task-ai",
+          content_mode: contentMode,
+        },
+      },
+    });
   }
 
   async function saveAsMaterial() {
