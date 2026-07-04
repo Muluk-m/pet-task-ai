@@ -12,7 +12,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import {
   IMAGE_JOB_POLL_INTERVAL_MS,
@@ -581,6 +581,8 @@ export function ImageGeneratePage() {
   const materials = useMaterials();
   const submit = useSubmitImageJob();
   const refreshActiveJob = useRefreshImageJob();
+  const refreshCursorRef = useRef(0);
+  const refreshInFlightRef = useRef(false);
   const [prompt, setPrompt] = useState("");
   const [size, setSize] =
     useState<(typeof sizeOptions)[number]["value"]>("1024x1024");
@@ -757,18 +759,22 @@ export function ImageGeneratePage() {
     if (ids.length === 0) {
       return;
     }
-    const refresh = () => {
-      if (refreshActiveJob.isPending) {
+    const refreshNext = () => {
+      if (refreshInFlightRef.current) {
         return;
       }
-      for (const id of ids) {
-        refreshActiveJob.mutate(id);
-      }
+      const id = ids[refreshCursorRef.current % ids.length];
+      refreshCursorRef.current += 1;
+      refreshInFlightRef.current = true;
+      refreshActiveJob.mutate(id, {
+        onSettled: () => {
+          refreshInFlightRef.current = false;
+        },
+      });
     };
-    const timer = window.setInterval(refresh, IMAGE_JOB_POLL_INTERVAL_MS);
-    refresh();
+    const timer = window.setInterval(refreshNext, IMAGE_JOB_POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
-  }, [activeJobIds, refreshActiveJob.isPending, refreshActiveJob.mutate]);
+  }, [activeJobIds, refreshActiveJob.mutate]);
 
   return (
     <div className="px-4 pt-4 pb-36">

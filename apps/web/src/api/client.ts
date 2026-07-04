@@ -312,8 +312,21 @@ export function useRefreshImageJob() {
         `/api/ai/image-jobs/${id}/refresh`,
         {},
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["image-jobs"] }),
+    onSuccess: (data) => {
+      queryClient.setQueryData<{ jobs: ImageGenerationJob[] }>(
+        ["image-jobs"],
+        (current) => {
+          if (!current) {
+            return current;
+          }
+          return {
+            jobs: current.jobs.map((job) =>
+              job.id === data.job.id ? data.job : job,
+            ),
+          };
+        },
+      );
+    },
   });
 }
 
