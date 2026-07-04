@@ -95,6 +95,20 @@ const stylePrompts: Record<string, string> = {
 
 const REVIEW_GENERATION_MODEL = "gpt-5.4-mini";
 
+function elapsedMs(start: number): number {
+  return Math.round(performance.now() - start);
+}
+
+function logAiTiming(
+  event: string,
+  fields: Record<string, string | number | boolean | null | undefined>,
+) {
+  console.info("[ai-timing]", {
+    event,
+    ...fields,
+  });
+}
+
 const platformPrompts: Record<string, string> = {
   xiaohongshu:
     "平台：小红书笔记。可以使用 emoji、分行排版，结尾可带 2-4 个话题标签（#开头）",
@@ -224,8 +238,10 @@ export const aiRouter = new Hono<Env>()
     "/extract-task",
     zValidator("json", aiExtractInputSchema),
     async (c) => {
+      const startedAt = performance.now();
       const { ruleText, images } = c.req.valid("json");
       const db = c.get("db");
+      const userId = c.get("userId");
 
       const provider = getAiProvider();
       const apiKey = getAiApiKey(c.env);
@@ -238,6 +254,12 @@ export const aiRouter = new Hono<Env>()
 
       const text = ruleText?.trim() ?? "";
       const imageUrls = images ?? [];
+      logAiTiming("extract_task_start", {
+        userId,
+        model: provider.model,
+        textLength: text.length,
+        imageCount: imageUrls.length,
+      });
 
       function buildUser(retryHint?: string): ChatUserContent {
         const hint = retryHint
@@ -264,6 +286,7 @@ export const aiRouter = new Hono<Env>()
       for (let attempt = 0; attempt < 2; attempt++) {
         let content: string;
         try {
+          const upstreamStartedAt = performance.now();
           content = await chatComplete({
             baseUrl: provider.baseUrl,
             apiKey,
@@ -273,7 +296,21 @@ export const aiRouter = new Hono<Env>()
             jsonMode: true,
             temperature: 0.2,
           });
+          logAiTiming("extract_task_upstream", {
+            userId,
+            model: provider.model,
+            attempt: attempt + 1,
+            durationMs: elapsedMs(upstreamStartedAt),
+            outputLength: content.length,
+          });
         } catch (error) {
+          logAiTiming("extract_task_error", {
+            userId,
+            model: provider.model,
+            attempt: attempt + 1,
+            totalMs: elapsedMs(startedAt),
+            error: error instanceof Error ? error.message.slice(0, 180) : null,
+          });
           return c.json(
             { error: error instanceof Error ? error.message : "AI 请求失败" },
             502,
@@ -288,9 +325,11 @@ export const aiRouter = new Hono<Env>()
           continue;
         }
 
+        const parseStartedAt = performance.now();
         const result = aiTaskExtractionSchema.safeParse(
           sanitizeExtraction(parsed),
         );
+        const parseMs = elapsedMs(parseStartedAt);
         if (!result.success) {
           lastError = result.error.issues
             .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
@@ -298,15 +337,30 @@ export const aiRouter = new Hono<Env>()
           continue;
         }
 
+        const insertStartedAt = performance.now();
         await db.insert(aiExtractionLogs).values({
-          userId: c.get("userId"),
+          userId,
           inputText: text || `[截图识别 ${imageUrls.length} 张]`,
           outputJson: result.data,
+        });
+        logAiTiming("extract_task_success", {
+          userId,
+          model: provider.model,
+          attempt: attempt + 1,
+          parseMs,
+          insertMs: elapsedMs(insertStartedAt),
+          totalMs: elapsedMs(startedAt),
         });
 
         return c.json({ extraction: result.data });
       }
 
+      logAiTiming("extract_task_parse_failed", {
+        userId,
+        model: provider.model,
+        totalMs: elapsedMs(startedAt),
+        error: lastError.slice(0, 180),
+      });
       return c.json({ error: `AI 识别结果解析失败：${lastError}` }, 502);
     },
   )
@@ -314,6 +368,7 @@ export const aiRouter = new Hono<Env>()
     "/generate-review",
     zValidator("json", generateReviewSchema),
     async (c) => {
+      const startedAt = performance.now();
       const input = c.req.valid("json");
       const db = c.get("db");
       const userId = c.get("userId");
@@ -330,6 +385,7 @@ export const aiRouter = new Hono<Env>()
       const contextParts: string[] = [];
 
       if (input.taskId) {
+        const taskStartedAt = performance.now();
         const task = await db.query.tasks.findFirst({
           where: and(eq(tasks.id, input.taskId), eq(tasks.userId, userId)),
           with: { steps: true },
@@ -349,9 +405,16 @@ export const aiRouter = new Hono<Env>()
         if (requirements.length > 0) {
           contextParts.push(`各平台要求：\n${requirements.join("\n")}`);
         }
+        logAiTiming("generate_review_task_context", {
+          userId,
+          taskId: input.taskId,
+          durationMs: elapsedMs(taskStartedAt),
+          requirementCount: requirements.length,
+        });
       }
 
       if (input.materialIds.length > 0) {
+        const materialsStartedAt = performance.now();
         const rows = await db
           .select()
           .from(materials)
@@ -382,6 +445,13 @@ export const aiRouter = new Hono<Env>()
             `将随文案一起发布的图片素材（可在文中自然呼应画面内容）：\n${images.join("\n")}`,
           );
         }
+        logAiTiming("generate_review_material_context", {
+          userId,
+          materialCount: input.materialIds.length,
+          durationMs: elapsedMs(materialsStartedAt),
+          copyCount: copies.length,
+          imageCount: images.length,
+        });
       }
 
       if (input.customRequirement) {
@@ -401,6 +471,18 @@ ${platformPrompts[input.platform]}
           ? contextParts.join("\n\n")
           : "（无额外素材，请基于用户选择的平台与风格创作一段通用、真实、不夸张的内容）";
 
+      logAiTiming("generate_review_start", {
+        userId,
+        mode: input.mode,
+        platform: input.platform,
+        style: input.style,
+        wordCount: input.wordCount,
+        taskId: input.taskId ?? null,
+        materialCount: input.materialIds.length,
+        model: REVIEW_GENERATION_MODEL,
+        contextLength: user.length,
+      });
+
       let content: string;
       try {
         if (input.mode === "xiaohongshu_publish") {
@@ -409,14 +491,12 @@ ${platformPrompts[input.platform]}
 输出必须是 JSON 对象，不要 Markdown，不要额外解释。字段：
 - title: 小红书标题，中文 8-24 字，真实自然，不标题党
 - body: 小红书正文，可分行，可自然包含 emoji，总字数接近要求
-- hashtags: 2-8 个话题标签，不带 # 符号
-- coverSuggestion: 首图/封面建议
-- imageNotes: 配图建议数组，可结合素材
-- complianceNotes: 合规自检数组，说明已避免夸大、极限词、返现内幕等`;
+- hashtags: 2-8 个话题标签，不带 # 符号`;
 
           let parsed: unknown;
           let lastError = "";
           for (let attempt = 0; attempt < 2; attempt += 1) {
+            const upstreamStartedAt = performance.now();
             const raw = await chatComplete({
               baseUrl: provider.baseUrl,
               apiKey,
@@ -426,10 +506,25 @@ ${platformPrompts[input.platform]}
               jsonMode: true,
               temperature: 0.75,
             });
+            logAiTiming("generate_review_upstream", {
+              userId,
+              mode: input.mode,
+              model: REVIEW_GENERATION_MODEL,
+              attempt: attempt + 1,
+              durationMs: elapsedMs(upstreamStartedAt),
+              outputLength: raw.length,
+            });
             try {
+              const parseStartedAt = performance.now();
               parsed = xiaohongshuPublishPayloadSchema.parse(
                 normalizeStructuredPayload(extractJson(raw)),
               );
+              logAiTiming("generate_review_parse", {
+                userId,
+                mode: input.mode,
+                attempt: attempt + 1,
+                durationMs: elapsedMs(parseStartedAt),
+              });
               break;
             } catch (error) {
               lastError =
@@ -437,6 +532,12 @@ ${platformPrompts[input.platform]}
             }
           }
           if (!parsed) {
+            logAiTiming("generate_review_parse_failed", {
+              userId,
+              mode: input.mode,
+              totalMs: elapsedMs(startedAt),
+              error: lastError.slice(0, 180),
+            });
             return c.json(
               { error: `小红书发布内容解析失败：${lastError}` },
               502,
@@ -444,6 +545,7 @@ ${platformPrompts[input.platform]}
           }
           content = JSON.stringify(parsed);
         } else {
+          const upstreamStartedAt = performance.now();
           content = await chatComplete({
             baseUrl: provider.baseUrl,
             apiKey,
@@ -452,14 +554,30 @@ ${platformPrompts[input.platform]}
             user,
             temperature: 0.8,
           });
+          logAiTiming("generate_review_upstream", {
+            userId,
+            mode: input.mode,
+            model: REVIEW_GENERATION_MODEL,
+            attempt: 1,
+            durationMs: elapsedMs(upstreamStartedAt),
+            outputLength: content.length,
+          });
         }
       } catch (error) {
+        logAiTiming("generate_review_error", {
+          userId,
+          mode: input.mode,
+          model: REVIEW_GENERATION_MODEL,
+          totalMs: elapsedMs(startedAt),
+          error: error instanceof Error ? error.message.slice(0, 180) : null,
+        });
         return c.json(
           { error: error instanceof Error ? error.message : "AI 请求失败" },
           502,
         );
       }
 
+      const insertStartedAt = performance.now();
       const inserted = await db
         .insert(generatedContents)
         .values({
@@ -472,6 +590,14 @@ ${platformPrompts[input.platform]}
           content: content.trim(),
         })
         .returning();
+      logAiTiming("generate_review_success", {
+        userId,
+        mode: input.mode,
+        model: REVIEW_GENERATION_MODEL,
+        outputLength: content.length,
+        insertMs: elapsedMs(insertStartedAt),
+        totalMs: elapsedMs(startedAt),
+      });
 
       return c.json({ generated: inserted[0] });
     },

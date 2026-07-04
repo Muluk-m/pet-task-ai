@@ -107,12 +107,6 @@ export const xiaohongshuPublishPayloadSchema = z.object({
   title: z.string().trim().min(1).max(60),
   body: z.string().trim().min(1).max(2000),
   hashtags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
-  coverSuggestion: z.string().trim().max(200).optional(),
-  imageNotes: z.array(z.string().trim().min(1).max(200)).max(8).default([]),
-  complianceNotes: z
-    .array(z.string().trim().min(1).max(200))
-    .max(8)
-    .default([]),
 });
 
 const dateStringSchema = z

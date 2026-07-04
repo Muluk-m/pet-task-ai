@@ -149,8 +149,6 @@ describe("xiaohongshuPublishPayloadSchema", () => {
       title: "新手也能放心用的清洁好物",
       body: "包装很稳，味道也不冲，日常用起来挺顺手。",
       hashtags: ["家清好物", "真实使用"],
-      imageNotes: ["首图展示产品全貌"],
-      complianceNotes: ["未提及返现"],
     });
     expect(parsed.hashtags).toEqual(["家清好物", "真实使用"]);
   });
