@@ -285,12 +285,6 @@ export function useImageJobs() {
   return useQuery({
     queryKey: ["image-jobs"],
     queryFn: () => api<{ jobs: ImageGenerationJob[] }>("/api/ai/image-jobs"),
-    refetchInterval: (query) => {
-      const jobs = query.state.data?.jobs ?? [];
-      return jobs.some((job) => ["queued", "in_progress"].includes(job.status))
-        ? IMAGE_JOB_POLL_INTERVAL_MS
-        : false;
-    },
   });
 }
 
