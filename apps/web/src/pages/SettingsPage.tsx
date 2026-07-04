@@ -26,6 +26,10 @@ import {
   useUpdateProfile,
   useUploadAvatar,
 } from "../api/client";
+import {
+  MobileSelectButton,
+  MobileSelectSheet,
+} from "../components/mobile-select";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -318,6 +322,7 @@ function AiModelCard() {
   const [selected, setSelected] = useState<string>(
     () => getSelectedAiModel() ?? "",
   );
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const options = useMemo(
     () =>
@@ -367,19 +372,13 @@ function AiModelCard() {
           <p className="mt-0.5 text-xs text-muted-foreground">
             速度和质量可以自己取舍；失败时后端会按配置自动 fallback
           </p>
-          <select
-            className="mt-3 h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm outline-none"
-            disabled={!data}
-            value={current}
-            onChange={(event) => choose(event.target.value)}
-          >
-            {options.map((model) => (
-              <option key={model.ref} value={model.ref}>
-                {model.label}
-                {model.supportsVision ? " · 支持截图" : ""}
-              </option>
-            ))}
-          </select>
+          <div className="mt-3">
+            <MobileSelectButton
+              disabled={!data}
+              label={currentModel?.label ?? "选择模型"}
+              onClick={() => setPickerOpen(true)}
+            />
+          </div>
           {currentModel?.description ? (
             <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
               {currentModel.description}
@@ -387,6 +386,20 @@ function AiModelCard() {
           ) : null}
         </div>
       </div>
+      <MobileSelectSheet
+        open={pickerOpen}
+        options={options.map((model) => ({
+          value: model.ref,
+          label: model.supportsVision
+            ? `${model.label} · 支持截图`
+            : model.label,
+          description: model.description,
+        }))}
+        title="选择 AI 模型"
+        value={current}
+        onOpenChange={setPickerOpen}
+        onPick={choose}
+      />
     </section>
   );
 }

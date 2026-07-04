@@ -1,7 +1,6 @@
 import {
   ArrowLeft,
   Check,
-  ChevronDown,
   ChevronRight,
   ImagePlus,
   Loader2,
@@ -30,6 +29,10 @@ import type {
   ImageQueueModel,
   Material,
 } from "../api/types";
+import {
+  MobileSelectButton,
+  MobileSelectSheet,
+} from "../components/mobile-select";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import {
@@ -68,77 +71,6 @@ const statusLabels: Record<ImageGenerationJob["status"], string> = {
 
 function selectedModelValue(model: ImageQueueModel) {
   return `${model.provider}::${model.model}`;
-}
-
-function ChoiceButton({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className="flex h-11 min-w-0 items-center justify-between gap-2 rounded-2xl border border-input bg-card px-3 text-left text-sm shadow-xs active:bg-muted"
-      type="button"
-      onClick={onClick}
-    >
-      <span className="truncate font-medium">{label}</span>
-      <ChevronDown
-        className="shrink-0 text-muted-foreground"
-        size={16}
-        strokeWidth={1.9}
-      />
-    </button>
-  );
-}
-
-function OptionSheet<T extends string>({
-  title,
-  options,
-  value,
-  onPick,
-  onClose,
-}: {
-  title: string;
-  options: Array<{ value: T; label: string }>;
-  value: T;
-  onPick: (value: T) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Sheet open onOpenChange={(open) => !open && onClose()}>
-      <SheetContent
-        className="mx-auto max-w-[560px] rounded-t-3xl"
-        side="bottom"
-      >
-        <SheetHeader>
-          <SheetTitle>{title}</SheetTitle>
-        </SheetHeader>
-        <div className="space-y-2 px-4 pb-6">
-          {options.map((option) => (
-            <button
-              className={cn(
-                "flex h-12 w-full items-center justify-between rounded-2xl border px-4 text-left text-sm active:bg-muted",
-                value === option.value
-                  ? "border-cta bg-cta/8 font-semibold text-cta"
-                  : "border-border bg-card text-foreground",
-              )}
-              key={option.value}
-              type="button"
-              onClick={() => {
-                onPick(option.value);
-                onClose();
-              }}
-            >
-              {option.label}
-              {value === option.value ? <Check size={16} /> : null}
-            </button>
-          ))}
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
 }
 
 function resultImages(job: ImageGenerationJob): ImageJobResultImage[] {
@@ -720,11 +652,11 @@ export function ImageGeneratePage() {
         />
 
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <ChoiceButton
+          <MobileSelectButton
             label={selectedModel?.label ?? "选择模型"}
             onClick={() => setModelPickerOpen(true)}
           />
-          <ChoiceButton
+          <MobileSelectButton
             label={selectedQualityLabel}
             onClick={() => setQualityPickerOpen(true)}
           />
@@ -862,25 +794,23 @@ export function ImageGeneratePage() {
         </div>
       </section>
 
-      {modelPickerOpen ? (
-        <OptionSheet
-          title="选择模型"
-          options={modelOptions}
-          value={modelValue}
-          onClose={() => setModelPickerOpen(false)}
-          onPick={setModelValue}
-        />
-      ) : null}
+      <MobileSelectSheet
+        open={modelPickerOpen}
+        options={modelOptions}
+        title="选择模型"
+        value={modelValue}
+        onOpenChange={setModelPickerOpen}
+        onPick={setModelValue}
+      />
 
-      {qualityPickerOpen ? (
-        <OptionSheet
-          title="选择质量"
-          options={[...qualityOptions]}
-          value={quality}
-          onClose={() => setQualityPickerOpen(false)}
-          onPick={setQuality}
-        />
-      ) : null}
+      <MobileSelectSheet
+        open={qualityPickerOpen}
+        options={[...qualityOptions]}
+        title="选择质量"
+        value={quality}
+        onOpenChange={setQualityPickerOpen}
+        onPick={setQuality}
+      />
 
       {referencePickerOpen ? (
         <ReferenceImageSheet
