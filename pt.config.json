@@ -40,17 +40,6 @@
             "description": "Agnes OpenAI 兼容模型，当前 ping 可用但延迟偏高"
           }
         ]
-      },
-      "mimo": {
-        "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
-        "apiKeyEnv": "AZURE_OPENAI_API_KEY",
-        "models": [
-          {
-            "id": "mimo-v2.5-pro",
-            "label": "MiMo V2.5 Pro",
-            "description": "小米 MiMo Token Plan CN；当前 key ping 未通过"
-          }
-        ]
       }
     }
   },
