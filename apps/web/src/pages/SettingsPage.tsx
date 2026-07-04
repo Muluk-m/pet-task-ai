@@ -326,7 +326,7 @@ function AiModelCard() {
 
   const options = useMemo(
     () =>
-      data?.providers.flatMap((provider) =>
+      data?.providers?.flatMap((provider) =>
         provider.models.map((model) => ({
           ...model,
           providerId: provider.id,
