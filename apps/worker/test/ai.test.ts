@@ -42,76 +42,80 @@ function postJson(path: string, body: unknown, method = "POST") {
 }
 
 function mockQueueFetch() {
-  const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-    const url = String(input);
-    if (url.endsWith("/api/channels")) {
-      return Response.json({
-        channels: [
-          {
-            id: "openai-images",
-            kind: "openai-queue",
-            label: "OpenAI",
-            models: [
-              {
-                id: "gpt-image-2",
-                label: "GPT Image 2",
-                capabilities: ["generate", "edit", "mask", "quality"],
-              },
+  const fetchMock = vi.fn(
+    async (input: RequestInfo | URL, _init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/api/channels")) {
+        return Response.json({
+          channels: [
+            {
+              id: "openai-images",
+              kind: "openai-queue",
+              label: "OpenAI",
+              models: [
+                {
+                  id: "gpt-image-2",
+                  label: "GPT Image 2",
+                  capabilities: ["generate", "edit", "mask", "quality"],
+                },
+              ],
+            },
+            {
+              id: "gemini-flash-image",
+              kind: "gemini-queue",
+              label: "Gemini",
+              models: [
+                {
+                  id: "gemini-3.1-flash-image",
+                  label: "Gemini 3.1 Flash Image",
+                  capabilities: ["generate", "edit"],
+                },
+              ],
+            },
+            {
+              id: "agnes-images",
+              kind: "openai-queue",
+              label: "Agnes AI",
+              models: [
+                {
+                  id: "agnes-image-2.1-flash",
+                  label: "Agnes Image 2.1 Flash",
+                  capabilities: ["generate", "edit"],
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url.endsWith("/submit")) {
+        return Response.json({
+          request_id: "queue-request-1",
+          status: "queued",
+          submitted_at: 1000,
+        });
+      }
+      if (url.endsWith("/status")) {
+        return Response.json({
+          request_id: "queue-request-1",
+          status: "completed",
+          submitted_at: 1000,
+          started_at: 1100,
+          completed_at: 2000,
+          result: {
+            images: [
+              { index: 0, mime: "image/png", width: 1024, height: 1024 },
             ],
           },
-          {
-            id: "gemini-flash-image",
-            kind: "gemini-queue",
-            label: "Gemini",
-            models: [
-              {
-                id: "gemini-3.1-flash-image",
-                label: "Gemini 3.1 Flash Image",
-                capabilities: ["generate", "edit"],
-              },
-            ],
-          },
-          {
-            id: "agnes-images",
-            kind: "openai-queue",
-            label: "Agnes AI",
-            models: [
-              {
-                id: "agnes-image-2.1-flash",
-                label: "Agnes Image 2.1 Flash",
-                capabilities: ["generate", "edit"],
-              },
-            ],
-          },
-        ],
-      });
-    }
-    if (url.endsWith("/submit")) {
-      return Response.json({
-        request_id: "queue-request-1",
-        status: "queued",
-        submitted_at: 1000,
-      });
-    }
-    if (url.endsWith("/status")) {
-      return Response.json({
-        request_id: "queue-request-1",
-        status: "completed",
-        submitted_at: 1000,
-        started_at: 1100,
-        completed_at: 2000,
-        result: {
-          images: [{ index: 0, mime: "image/png", width: 1024, height: 1024 }],
-        },
-      });
-    }
-    if (url.endsWith("/image/0")) {
-      return new Response(new Uint8Array([137, 80, 78, 71]), {
-        headers: { "content-type": "image/png" },
-      });
-    }
-    return Response.json({ error: "unexpected_url", url }, { status: 500 });
-  });
+        });
+      }
+      if (url.endsWith("/image/0")) {
+        return new Response(new Uint8Array([137, 80, 78, 71]), {
+          headers: { "content-type": "image/png" },
+        });
+      }
+      return Response.json({ error: "unexpected_url", url }, { status: 500 });
+    },
+  );
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
@@ -176,6 +180,20 @@ describe("AI image queue API", () => {
       "https://image.nainma.online/v1/queue/openai-compat/gpt-image-2/submit",
       expect.objectContaining({ method: "POST" }),
     );
+    const submitCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith("/submit"),
+    );
+    expect(submitCall).toBeTruthy();
+    const body = JSON.parse(
+      String((submitCall?.[1] as RequestInit | undefined)?.body),
+    ) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      prompt: "真实摄影感产品图",
+      size: "1024x1024",
+      input_images: [],
+    });
+    expect(body).not.toHaveProperty("quality");
+    expect(body).not.toHaveProperty("n");
     const { job } = (await res.json()) as { job: { status: string } };
     expect(job.status).toBe("queued");
 

@@ -90,6 +90,33 @@ function toQueueProvider(kind?: string): string | null {
   return null;
 }
 
+function buildQueueSubmitBody(input: {
+  prompt: string;
+  size: string;
+  quality: string;
+  n: number;
+  provider: string;
+  inputImages: string[];
+  userId: number;
+}) {
+  const body: Record<string, unknown> = {
+    prompt: input.prompt,
+    size: input.size,
+    input_images: input.inputImages,
+    client_request_id: crypto.randomUUID(),
+    device_id: `pet-task-user-${input.userId}`,
+  };
+  // image-playground 的 OpenAI/Codex queue 链路不接受 quality/n；尤其 n=1
+  // 会在上游报 Unknown parameter: tools[0].n。Gemini queue 才透传 n 做 fan-out。
+  if (input.provider === "gemini") {
+    body.quality = input.quality;
+    if (input.n > 1) {
+      body.n = input.n;
+    }
+  }
+  return body;
+}
+
 const extractionSystemPrompt = `你是一个宠物商品置换活动的任务录入助手。用户会提供商家发布的活动规则——可能是文字，也可能是聊天/公告截图（或两者都有）。请仔细阅读全部文字与图片内容，提取结构化信息，仅输出一个 JSON 对象（json 格式），不要输出其他内容。
 
 字段说明：
@@ -885,15 +912,17 @@ ${platformPrompts[input.platform]}
           {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              prompt: input.prompt,
-              size: input.size,
-              quality: input.quality,
-              n: input.n,
-              input_images: inputImages,
-              client_request_id: crypto.randomUUID(),
-              device_id: `pet-task-user-${userId}`,
-            }),
+            body: JSON.stringify(
+              buildQueueSubmitBody({
+                prompt: input.prompt,
+                size: input.size,
+                quality: input.quality,
+                n: input.n,
+                provider: input.provider,
+                inputImages,
+                userId,
+              }),
+            ),
           },
         );
       } catch (error) {
