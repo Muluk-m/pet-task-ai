@@ -14,6 +14,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
+  IMAGE_JOB_POLL_INTERVAL_MS,
   useCancelImageJob,
   useDeleteImageJob,
   useImageJobs,
@@ -630,7 +631,7 @@ export function ImageGeneratePage() {
         refreshActiveJob.mutate(id);
       }
     };
-    const timer = window.setInterval(refresh, 6000);
+    const timer = window.setInterval(refresh, IMAGE_JOB_POLL_INTERVAL_MS);
     refresh();
     return () => window.clearInterval(timer);
   }, [activeJobIds, refreshActiveJob.isPending, refreshActiveJob.mutate]);

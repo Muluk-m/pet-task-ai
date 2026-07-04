@@ -27,6 +27,8 @@ import type {
   TaskWithSteps,
 } from "./types";
 
+export const IMAGE_JOB_POLL_INTERVAL_MS = 2500;
+
 export type CurrentUser = {
   id: number;
   username: string;
@@ -286,7 +288,7 @@ export function useImageJobs() {
     refetchInterval: (query) => {
       const jobs = query.state.data?.jobs ?? [];
       return jobs.some((job) => ["queued", "in_progress"].includes(job.status))
-        ? 5000
+        ? IMAGE_JOB_POLL_INTERVAL_MS
         : false;
     },
   });
