@@ -50,6 +50,7 @@ import {
   fileToCompressedDataUrl,
   thumbnailUrl,
 } from "../lib/image";
+import { flattenImageQueueModels } from "../lib/model-config";
 import { cn } from "../lib/utils";
 
 const sizeOptions = [
@@ -607,13 +608,8 @@ export function ImageGeneratePage() {
   } | null>(null);
 
   const models = useMemo(
-    () =>
-      config.data?.providers?.flatMap((provider) =>
-        provider.models.map((model) => ({ ...model })),
-      ) ??
-      config.data?.models ??
-      [],
-    [config.data?.models, config.data?.providers],
+    () => flattenImageQueueModels(config.data),
+    [config.data],
   );
   const selectedModel = useMemo(
     () => models.find((model) => selectedModelValue(model) === modelValue),

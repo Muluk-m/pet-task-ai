@@ -41,6 +41,7 @@ import {
 } from "../lib/ai-model";
 import { formatMoney, parseDbDate } from "../lib/format";
 import { compressImageFile, thumbnailUrl } from "../lib/image";
+import { flattenAiModelOptions } from "../lib/model-config";
 import { urlBase64ToUint8Array } from "../lib/pwa";
 
 function usePushToggle() {
@@ -324,16 +325,7 @@ function AiModelCard() {
   );
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const options = useMemo(
-    () =>
-      data?.providers?.flatMap((provider) =>
-        provider.models.map((model) => ({
-          ...model,
-          providerId: provider.id,
-        })),
-      ) ?? [],
-    [data],
-  );
+  const options = useMemo(() => flattenAiModelOptions(data), [data]);
   const current = selected || data?.defaultModel || "";
   const currentModel = options.find((model) => model.ref === current);
 
