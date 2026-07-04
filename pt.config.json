@@ -4,13 +4,53 @@
     "providers": {
       "qiliangjia": {
         "baseUrl": "https://sub2api.qiliangjia.one/v1",
-        "model": "gpt-5.5",
-        "apiKeyEnv": "OPENAI_API_KEY"
+        "apiKeyEnv": "OPENAI_API_KEY",
+        "models": [
+          {
+            "id": "gpt-5.4-mini",
+            "label": "GPT 5.4 Mini",
+            "description": "速度优先，适合文案生成和文本规则识别"
+          },
+          {
+            "id": "gpt-5.5",
+            "label": "GPT 5.5",
+            "description": "质量优先，适合截图识别和复杂规则抽取",
+            "supportsVision": true
+          }
+        ]
       },
       "deepseek": {
         "baseUrl": "https://api.deepseek.com/v1",
-        "model": "deepseek-chat",
-        "apiKeyEnv": "DEEPSEEK_API_KEY"
+        "apiKeyEnv": "DEEPSEEK_API_KEY",
+        "models": [
+          {
+            "id": "deepseek-chat",
+            "label": "DeepSeek Chat",
+            "description": "备用通用文本模型"
+          }
+        ]
+      },
+      "agnes": {
+        "baseUrl": "https://apihub.agnes-ai.com/v1",
+        "apiKeyEnv": "AGNES_API_KEY",
+        "models": [
+          {
+            "id": "agnes-2.0-flash",
+            "label": "Agnes 2.0 Flash",
+            "description": "Agnes OpenAI 兼容模型，当前 ping 可用但延迟偏高"
+          }
+        ]
+      },
+      "mimo": {
+        "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
+        "apiKeyEnv": "AZURE_OPENAI_API_KEY",
+        "models": [
+          {
+            "id": "mimo-v2.5-pro",
+            "label": "MiMo V2.5 Pro",
+            "description": "小米 MiMo Token Plan CN；当前 key ping 未通过"
+          }
+        ]
       }
     }
   },

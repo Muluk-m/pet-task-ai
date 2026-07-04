@@ -31,7 +31,6 @@ import {
   Pencil,
   Plus,
   RotateCcw,
-  Save,
   Store,
   Trash2,
   Wand2,
@@ -248,10 +247,9 @@ export function TaskDetailPage() {
   const setDraft = (stepId: number, value: string) =>
     setDrafts((prev) => ({ ...prev, [stepId]: value }));
 
-  function saveDrafts() {
+  useEffect(() => {
     localStorage.setItem(draftsKey, JSON.stringify(drafts));
-    toast("草稿已保存");
-  }
+  }, [drafts, draftsKey]);
 
   async function completeCurrentStep() {
     if (!expandedStep || expandedStep.status !== "pending") {
@@ -730,17 +728,9 @@ export function TaskDetailPage() {
       </p>
 
       <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[560px] gap-3 p-4 pb-safe">
-          <Button
-            className="h-11 flex-1 rounded-2xl"
-            variant="outline"
-            onClick={saveDrafts}
-          >
-            <Save />
-            保存草稿
-          </Button>
+        <div className="mx-auto flex max-w-[560px] p-4 pb-safe">
           <button
-            className="flex h-11 flex-[1.6] items-center justify-center gap-1.5 rounded-2xl bg-fab text-base font-semibold text-white shadow-sm shadow-fab/30 active:scale-[0.99] disabled:opacity-50"
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-2xl bg-fab text-base font-semibold text-white shadow-sm shadow-fab/30 active:scale-[0.99] disabled:opacity-50"
             disabled={
               completeStep.isPending ||
               !expandedStep ||

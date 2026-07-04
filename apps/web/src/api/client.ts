@@ -16,7 +16,9 @@ import type {
   UpdateTaskInput,
 } from "@pet-task-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { getSelectedAiModel } from "../lib/ai-model";
 import type {
+  AiModelConfig,
   GeneratedContent,
   ImageGenerationJob,
   ImageQueueConfig,
@@ -383,7 +385,10 @@ export function useDeleteMaterial() {
 export function useExtractTask() {
   return useMutation({
     mutationFn: (input: AiExtractInput) =>
-      postJson<{ extraction: AiTaskExtraction }>("/api/ai/extract-task", input),
+      postJson<{ extraction: AiTaskExtraction }>("/api/ai/extract-task", {
+        ...input,
+        aiModel: getSelectedAiModel(),
+      }),
   });
 }
 
@@ -391,12 +396,19 @@ export function useGenerateReview() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: GenerateReviewInput) =>
-      postJson<{ generated: GeneratedContent }>(
-        "/api/ai/generate-review",
-        input,
-      ),
+      postJson<{ generated: GeneratedContent }>("/api/ai/generate-review", {
+        ...input,
+        aiModel: getSelectedAiModel(),
+      }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["generations"] }),
+  });
+}
+
+export function useAiModelConfig() {
+  return useQuery({
+    queryKey: ["ai-model-config"],
+    queryFn: () => api<AiModelConfig>("/api/ai/model-config"),
   });
 }
 

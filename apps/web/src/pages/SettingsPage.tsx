@@ -1,6 +1,7 @@
 import {
   Archive,
   Bell,
+  Bot,
   Camera,
   Check,
   KeyRound,
@@ -14,6 +15,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import ptConfig from "../../../../pt.config.json";
 import {
+  useAiModelConfig,
   useChangePassword,
   useLogout,
   useMe,
@@ -28,6 +30,11 @@ import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Switch } from "../components/ui/switch";
+import {
+  AI_MODEL_STORAGE_KEY,
+  getSelectedAiModel,
+  setSelectedAiModel,
+} from "../lib/ai-model";
 import { formatMoney, parseDbDate } from "../lib/format";
 import { compressImageFile, thumbnailUrl } from "../lib/image";
 import { urlBase64ToUint8Array } from "../lib/pwa";
@@ -306,6 +313,84 @@ function ChangePasswordCard() {
   );
 }
 
+function AiModelCard() {
+  const { data } = useAiModelConfig();
+  const [selected, setSelected] = useState<string>(
+    () => getSelectedAiModel() ?? "",
+  );
+
+  const options = useMemo(
+    () =>
+      data?.providers.flatMap((provider) =>
+        provider.models.map((model) => ({
+          ...model,
+          providerId: provider.id,
+        })),
+      ) ?? [],
+    [data],
+  );
+  const current = selected || data?.defaultModel || "";
+  const currentModel = options.find((model) => model.ref === current);
+
+  useEffect(() => {
+    if (!data) {
+      return;
+    }
+    const stored = getSelectedAiModel();
+    if (!stored) {
+      setSelected(data.defaultModel);
+      return;
+    }
+    if (options.some((model) => model.ref === stored)) {
+      setSelected(stored);
+      return;
+    }
+    window.localStorage.removeItem(AI_MODEL_STORAGE_KEY);
+    setSelected(data.defaultModel);
+  }, [data, options]);
+
+  function choose(modelRef: string) {
+    setSelected(modelRef);
+    setSelectedAiModel(modelRef);
+    const model = options.find((item) => item.ref === modelRef);
+    toast(model ? `已切换到 ${model.label}` : "AI 模型已更新");
+  }
+
+  return (
+    <section className="mt-3 rounded-3xl bg-card p-4 shadow-xs">
+      <div className="flex items-start gap-2.5">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary">
+          <Bot size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[15px] font-semibold">AI 模型</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            速度和质量可以自己取舍；失败时后端会按配置自动 fallback
+          </p>
+          <select
+            className="mt-3 h-11 w-full rounded-2xl border border-input bg-card px-3 text-sm outline-none"
+            disabled={!data}
+            value={current}
+            onChange={(event) => choose(event.target.value)}
+          >
+            {options.map((model) => (
+              <option key={model.ref} value={model.ref}>
+                {model.label}
+                {model.supportsVision ? " · 支持截图" : ""}
+              </option>
+            ))}
+          </select>
+          {currentModel?.description ? (
+            <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+              {currentModel.description}
+            </p>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const { data } = useTasks();
   const logout = useLogout();
@@ -407,6 +492,8 @@ export function SettingsPage() {
           />
         </div>
       </section>
+
+      <AiModelCard />
 
       <ChangePasswordCard />
 

@@ -68,6 +68,24 @@ export type GeneratedContent = {
   createdAt: string;
 };
 
+export type AiModelOption = {
+  id: string;
+  ref: string;
+  label: string;
+  description: string | null;
+  supportsVision: boolean;
+};
+
+export type AiProviderOption = {
+  id: string;
+  models: AiModelOption[];
+};
+
+export type AiModelConfig = {
+  defaultModel: string;
+  providers: AiProviderOption[];
+};
+
 export type ImageQueueModel = {
   provider: ImageQueueProvider;
   model: string;

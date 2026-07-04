@@ -109,6 +109,13 @@ export const xiaohongshuPublishPayloadSchema = z.object({
   hashtags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
 });
 
+const aiModelRefSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z0-9_-]+:.+$/, "模型配置格式不正确")
+  .max(160)
+  .optional();
+
 const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD");
@@ -176,6 +183,7 @@ export const aiExtractInputSchema = z
   .object({
     ruleText: z.string().optional(),
     images: z.array(imageDataUrlSchema).max(3, "最多上传 3 张截图").optional(),
+    aiModel: aiModelRefSchema,
   })
   .refine(
     (value) =>
@@ -228,6 +236,7 @@ export const generateReviewSchema = z.object({
   style: reviewStyleSchema,
   wordCount: z.number().int().min(20).max(500),
   customRequirement: z.string().trim().max(1000).optional(),
+  aiModel: aiModelRefSchema,
 });
 
 export const stepTypeTitles: Record<

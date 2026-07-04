@@ -21,7 +21,14 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { DrizzleD1Database } from "drizzle-orm/d1";
 import { Hono } from "hono";
 import { ASSET_URL_PREFIX, putAsset } from "../lib/assets";
-import { getAiApiKey, getAiProvider, getImageQueueConfig } from "../lib/config";
+import {
+  getAiApiKey,
+  getAiModelFallbacks,
+  getAiProvider,
+  getImageQueueConfig,
+  getPublicAiModelConfig,
+} from "../lib/config";
+import type { AiModelSelection } from "../lib/config";
 import {
   chatComplete,
   dataUrlToBlob,
@@ -93,9 +100,6 @@ const stylePrompts: Record<string, string> = {
   short_praise: "简短好评：直接、简洁地夸赞产品，重点突出一两个优点",
 };
 
-const TEXT_EXTRACTION_MODEL = "gpt-5.4-mini";
-const REVIEW_GENERATION_MODEL = "gpt-5.4-mini";
-
 function elapsedMs(start: number): number {
   return Math.round(performance.now() - start);
 }
@@ -108,6 +112,10 @@ function logAiTiming(
     event,
     ...fields,
   });
+}
+
+function modelRef(selection: AiModelSelection): string {
+  return `${selection.providerId}:${selection.model.id}`;
 }
 
 const platformPrompts: Record<string, string> = {
@@ -235,33 +243,30 @@ async function refreshJobStatus(
 }
 
 export const aiRouter = new Hono<Env>()
+  .get("/model-config", (c) => c.json(getPublicAiModelConfig()))
   .post(
     "/extract-task",
     zValidator("json", aiExtractInputSchema),
     async (c) => {
       const startedAt = performance.now();
-      const { ruleText, images } = c.req.valid("json");
+      const { ruleText, images, aiModel } = c.req.valid("json");
       const db = c.get("db");
       const userId = c.get("userId");
 
-      const provider = getAiProvider();
-      const apiKey = getAiApiKey(c.env);
-      if (!apiKey) {
-        return c.json(
-          { error: `未配置 AI key（环境变量 ${provider.apiKeyEnv}）` },
-          500,
-        );
-      }
-
       const text = ruleText?.trim() ?? "";
       const imageUrls = images ?? [];
-      const extractionModel =
-        imageUrls.length > 0 ? provider.model : TEXT_EXTRACTION_MODEL;
+      const candidates = getAiModelFallbacks(aiModel, {
+        requiresVision: imageUrls.length > 0,
+      });
+      if (candidates.length === 0) {
+        return c.json({ error: "没有可用的 AI 模型配置" }, 500);
+      }
       logAiTiming("extract_task_start", {
         userId,
-        model: extractionModel,
+        model: modelRef(candidates[0]),
         textLength: text.length,
         imageCount: imageUrls.length,
+        fallbackCount: candidates.length,
       });
 
       function buildUser(retryHint?: string): ChatUserContent {
@@ -286,85 +291,95 @@ export const aiRouter = new Hono<Env>()
       }
 
       let lastError = "";
-      for (let attempt = 0; attempt < 2; attempt++) {
-        let content: string;
-        try {
-          const upstreamStartedAt = performance.now();
-          content = await chatComplete({
-            baseUrl: provider.baseUrl,
-            apiKey,
-            model: extractionModel,
-            system: extractionSystemPrompt,
-            user: buildUser(attempt === 0 ? undefined : lastError),
-            jsonMode: true,
-            temperature: 0.2,
-          });
-          logAiTiming("extract_task_upstream", {
+      for (const selection of candidates) {
+        const apiKey = getAiApiKey(c.env, selection.provider);
+        if (!apiKey) {
+          lastError = `未配置 AI key（环境变量 ${selection.provider.apiKeyEnv}）`;
+          logAiTiming("extract_task_skip_model", {
             userId,
-            model: extractionModel,
-            attempt: attempt + 1,
-            durationMs: elapsedMs(upstreamStartedAt),
-            outputLength: content.length,
+            model: modelRef(selection),
+            error: lastError,
           });
-        } catch (error) {
-          logAiTiming("extract_task_error", {
-            userId,
-            model: extractionModel,
-            attempt: attempt + 1,
-            totalMs: elapsedMs(startedAt),
-            error: error instanceof Error ? error.message.slice(0, 180) : null,
-          });
-          return c.json(
-            { error: error instanceof Error ? error.message : "AI 请求失败" },
-            502,
+          continue;
+        }
+        for (let attempt = 0; attempt < 2; attempt++) {
+          let content: string;
+          try {
+            const upstreamStartedAt = performance.now();
+            content = await chatComplete({
+              baseUrl: selection.provider.baseUrl,
+              apiKey,
+              model: selection.model.id,
+              system: extractionSystemPrompt,
+              user: buildUser(attempt === 0 ? undefined : lastError),
+              jsonMode: true,
+              temperature: 0.2,
+            });
+            logAiTiming("extract_task_upstream", {
+              userId,
+              model: modelRef(selection),
+              attempt: attempt + 1,
+              durationMs: elapsedMs(upstreamStartedAt),
+              outputLength: content.length,
+            });
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : "AI 请求失败";
+            logAiTiming("extract_task_error", {
+              userId,
+              model: modelRef(selection),
+              attempt: attempt + 1,
+              totalMs: elapsedMs(startedAt),
+              error: lastError.slice(0, 180),
+            });
+            break;
+          }
+
+          let parsed: unknown;
+          try {
+            parsed = extractJson(content);
+          } catch {
+            lastError = "输出不是合法 JSON";
+            continue;
+          }
+
+          const parseStartedAt = performance.now();
+          const result = aiTaskExtractionSchema.safeParse(
+            sanitizeExtraction(parsed),
           );
+          const parseMs = elapsedMs(parseStartedAt);
+          if (!result.success) {
+            lastError = result.error.issues
+              .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+              .join("; ");
+            continue;
+          }
+
+          const insertStartedAt = performance.now();
+          await db.insert(aiExtractionLogs).values({
+            userId,
+            inputText: text || `[截图识别 ${imageUrls.length} 张]`,
+            outputJson: result.data,
+          });
+          logAiTiming("extract_task_success", {
+            userId,
+            model: modelRef(selection),
+            attempt: attempt + 1,
+            parseMs,
+            insertMs: elapsedMs(insertStartedAt),
+            totalMs: elapsedMs(startedAt),
+          });
+
+          return c.json({ extraction: result.data });
         }
-
-        let parsed: unknown;
-        try {
-          parsed = extractJson(content);
-        } catch {
-          lastError = "输出不是合法 JSON";
-          continue;
-        }
-
-        const parseStartedAt = performance.now();
-        const result = aiTaskExtractionSchema.safeParse(
-          sanitizeExtraction(parsed),
-        );
-        const parseMs = elapsedMs(parseStartedAt);
-        if (!result.success) {
-          lastError = result.error.issues
-            .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
-            .join("; ");
-          continue;
-        }
-
-        const insertStartedAt = performance.now();
-        await db.insert(aiExtractionLogs).values({
-          userId,
-          inputText: text || `[截图识别 ${imageUrls.length} 张]`,
-          outputJson: result.data,
-        });
-        logAiTiming("extract_task_success", {
-          userId,
-          model: extractionModel,
-          attempt: attempt + 1,
-          parseMs,
-          insertMs: elapsedMs(insertStartedAt),
-          totalMs: elapsedMs(startedAt),
-        });
-
-        return c.json({ extraction: result.data });
       }
 
       logAiTiming("extract_task_parse_failed", {
         userId,
-        model: extractionModel,
+        model: modelRef(candidates[0]),
         totalMs: elapsedMs(startedAt),
         error: lastError.slice(0, 180),
       });
-      return c.json({ error: `AI 识别结果解析失败：${lastError}` }, 502);
+      return c.json({ error: `AI 识别失败：${lastError}` }, 502);
     },
   )
   .post(
@@ -376,13 +391,9 @@ export const aiRouter = new Hono<Env>()
       const db = c.get("db");
       const userId = c.get("userId");
 
-      const provider = getAiProvider();
-      const apiKey = getAiApiKey(c.env);
-      if (!apiKey) {
-        return c.json(
-          { error: `未配置 AI key（环境变量 ${provider.apiKeyEnv}）` },
-          500,
-        );
+      const candidates = getAiModelFallbacks(input.aiModel);
+      if (candidates.length === 0) {
+        return c.json({ error: "没有可用的 AI 模型配置" }, 500);
       }
 
       const contextParts: string[] = [];
@@ -482,95 +493,125 @@ ${platformPrompts[input.platform]}
         wordCount: input.wordCount,
         taskId: input.taskId ?? null,
         materialCount: input.materialIds.length,
-        model: REVIEW_GENERATION_MODEL,
+        model: modelRef(candidates[0]),
         contextLength: user.length,
+        fallbackCount: candidates.length,
       });
 
-      let content: string;
+      let content = "";
+      let usedModel = modelRef(candidates[0]);
+      let lastError = "";
       try {
-        if (input.mode === "xiaohongshu_publish") {
-          const structuredSystem = `${baseSystem}
+        for (const selection of candidates) {
+          const apiKey = getAiApiKey(c.env, selection.provider);
+          if (!apiKey) {
+            lastError = `未配置 AI key（环境变量 ${selection.provider.apiKeyEnv}）`;
+            logAiTiming("generate_review_skip_model", {
+              userId,
+              mode: input.mode,
+              model: modelRef(selection),
+              error: lastError,
+            });
+            continue;
+          }
+          try {
+            if (input.mode === "xiaohongshu_publish") {
+              const structuredSystem = `${baseSystem}
 
 输出必须是 JSON 对象，不要 Markdown，不要额外解释。字段：
 - title: 小红书标题，中文 8-24 字，真实自然，不标题党
 - body: 小红书正文，可分行，可自然包含 emoji，总字数接近要求
 - hashtags: 2-8 个话题标签，不带 # 符号`;
 
-          let parsed: unknown;
-          let lastError = "";
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            const upstreamStartedAt = performance.now();
-            const raw = await chatComplete({
-              baseUrl: provider.baseUrl,
-              apiKey,
-              model: REVIEW_GENERATION_MODEL,
-              system: structuredSystem,
-              user,
-              jsonMode: true,
-              temperature: 0.75,
-            });
-            logAiTiming("generate_review_upstream", {
-              userId,
-              mode: input.mode,
-              model: REVIEW_GENERATION_MODEL,
-              attempt: attempt + 1,
-              durationMs: elapsedMs(upstreamStartedAt),
-              outputLength: raw.length,
-            });
-            try {
-              const parseStartedAt = performance.now();
-              parsed = xiaohongshuPublishPayloadSchema.parse(
-                normalizeStructuredPayload(extractJson(raw)),
-              );
-              logAiTiming("generate_review_parse", {
+              let parsed: unknown;
+              for (let attempt = 0; attempt < 2; attempt += 1) {
+                const upstreamStartedAt = performance.now();
+                const raw = await chatComplete({
+                  baseUrl: selection.provider.baseUrl,
+                  apiKey,
+                  model: selection.model.id,
+                  system: structuredSystem,
+                  user,
+                  jsonMode: true,
+                  temperature: 0.75,
+                });
+                logAiTiming("generate_review_upstream", {
+                  userId,
+                  mode: input.mode,
+                  model: modelRef(selection),
+                  attempt: attempt + 1,
+                  durationMs: elapsedMs(upstreamStartedAt),
+                  outputLength: raw.length,
+                });
+                try {
+                  const parseStartedAt = performance.now();
+                  parsed = xiaohongshuPublishPayloadSchema.parse(
+                    normalizeStructuredPayload(extractJson(raw)),
+                  );
+                  logAiTiming("generate_review_parse", {
+                    userId,
+                    mode: input.mode,
+                    attempt: attempt + 1,
+                    durationMs: elapsedMs(parseStartedAt),
+                  });
+                  break;
+                } catch (error) {
+                  lastError =
+                    error instanceof Error ? error.message : String(error);
+                }
+              }
+              if (parsed) {
+                content = JSON.stringify(parsed);
+                usedModel = modelRef(selection);
+                break;
+              }
+              logAiTiming("generate_review_parse_failed", {
                 userId,
                 mode: input.mode,
-                attempt: attempt + 1,
-                durationMs: elapsedMs(parseStartedAt),
+                model: modelRef(selection),
+                totalMs: elapsedMs(startedAt),
+                error: lastError.slice(0, 180),
               });
+            } else {
+              const upstreamStartedAt = performance.now();
+              content = await chatComplete({
+                baseUrl: selection.provider.baseUrl,
+                apiKey,
+                model: selection.model.id,
+                system: `${baseSystem}\n\n只输出文案正文，不要任何解释。`,
+                user,
+                temperature: 0.8,
+              });
+              logAiTiming("generate_review_upstream", {
+                userId,
+                mode: input.mode,
+                model: modelRef(selection),
+                attempt: 1,
+                durationMs: elapsedMs(upstreamStartedAt),
+                outputLength: content.length,
+              });
+              usedModel = modelRef(selection);
               break;
-            } catch (error) {
-              lastError =
-                error instanceof Error ? error.message : String(error);
             }
-          }
-          if (!parsed) {
-            logAiTiming("generate_review_parse_failed", {
+          } catch (error) {
+            lastError = error instanceof Error ? error.message : "AI 请求失败";
+            logAiTiming("generate_review_model_error", {
               userId,
               mode: input.mode,
+              model: modelRef(selection),
               totalMs: elapsedMs(startedAt),
               error: lastError.slice(0, 180),
             });
-            return c.json(
-              { error: `小红书发布内容解析失败：${lastError}` },
-              502,
-            );
           }
-          content = JSON.stringify(parsed);
-        } else {
-          const upstreamStartedAt = performance.now();
-          content = await chatComplete({
-            baseUrl: provider.baseUrl,
-            apiKey,
-            model: REVIEW_GENERATION_MODEL,
-            system: `${baseSystem}\n\n只输出文案正文，不要任何解释。`,
-            user,
-            temperature: 0.8,
-          });
-          logAiTiming("generate_review_upstream", {
-            userId,
-            mode: input.mode,
-            model: REVIEW_GENERATION_MODEL,
-            attempt: 1,
-            durationMs: elapsedMs(upstreamStartedAt),
-            outputLength: content.length,
-          });
+        }
+        if (!content) {
+          throw new Error(lastError || "AI 请求失败");
         }
       } catch (error) {
         logAiTiming("generate_review_error", {
           userId,
           mode: input.mode,
-          model: REVIEW_GENERATION_MODEL,
+          model: usedModel,
           totalMs: elapsedMs(startedAt),
           error: error instanceof Error ? error.message.slice(0, 180) : null,
         });
@@ -596,7 +637,7 @@ ${platformPrompts[input.platform]}
       logAiTiming("generate_review_success", {
         userId,
         mode: input.mode,
-        model: REVIEW_GENERATION_MODEL,
+        model: usedModel,
         outputLength: content.length,
         insertMs: elapsedMs(insertStartedAt),
         totalMs: elapsedMs(startedAt),
