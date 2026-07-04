@@ -608,7 +608,7 @@ export function ImageGeneratePage() {
 
   const models = useMemo(
     () =>
-      config.data?.providers.flatMap((provider) =>
+      config.data?.providers?.flatMap((provider) =>
         provider.models.map((model) => ({ ...model })),
       ) ??
       config.data?.models ??
