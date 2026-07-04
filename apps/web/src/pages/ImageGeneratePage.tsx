@@ -2,11 +2,13 @@ import {
   ArrowLeft,
   Check,
   ChevronDown,
+  ChevronRight,
   ImagePlus,
   Loader2,
   Minus,
   Plus,
   RefreshCw,
+  Trash2,
   Upload,
   X,
 } from "lucide-react";
@@ -14,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
   useCancelImageJob,
+  useDeleteImageJob,
   useImageJobs,
   useImageQueueConfig,
   useMaterials,
@@ -350,42 +353,102 @@ function SaveGeneratedImageButton({
   );
 }
 
-function JobCard({ job }: { job: ImageGenerationJob }) {
+function JobCard({
+  expanded,
+  job,
+  onRetry,
+  onToggle,
+}: {
+  expanded: boolean;
+  job: ImageGenerationJob;
+  onRetry: (job: ImageGenerationJob) => void;
+  onToggle: () => void;
+}) {
   const refresh = useRefreshImageJob();
   const cancel = useCancelImageJob();
+  const deleteJob = useDeleteImageJob();
   const active = job.status === "queued" || job.status === "in_progress";
   const images = resultImages(job);
+  const firstImage = images[0];
+
+  async function removeJob() {
+    if (
+      !window.confirm("删除这条生图任务记录？已保存到素材库的图片不会受影响。")
+    ) {
+      return;
+    }
+    try {
+      await deleteJob.mutateAsync(job.id);
+      toast("任务已删除");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "删除失败", "error");
+    }
+  }
 
   return (
-    <article className="rounded-2xl border border-border/70 bg-card p-3 shadow-xs">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="line-clamp-2 text-sm font-medium">{job.prompt}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {job.model} · {job.size} · {formatDateTime(job.createdAt)}
+    <article className="rounded-2xl border border-border/70 bg-card shadow-xs">
+      <button
+        className="flex w-full items-center gap-3 p-3 text-left active:bg-muted/50"
+        type="button"
+        onClick={onToggle}
+      >
+        <div className="relative size-14 shrink-0 overflow-hidden rounded-xl bg-muted">
+          {firstImage ? (
+            <img
+              alt={firstImage.revised_prompt ?? job.prompt}
+              className="size-full object-cover"
+              src={`/api/ai/image-jobs/${job.id}/image/${firstImage.index}`}
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center text-muted-foreground">
+              {active ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : (
+                <ImagePlus size={18} />
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                job.status === "completed" && "bg-success-soft text-success",
+                active && "bg-warning-soft text-warning",
+                job.status === "failed" && "bg-destructive/10 text-destructive",
+                job.status === "cancelled" && "bg-muted text-muted-foreground",
+              )}
+            >
+              {statusLabels[job.status]}
+            </span>
+            <span className="truncate text-xs text-muted-foreground">
+              {job.model} · {job.size}
+            </span>
+          </div>
+          <p className="mt-1 line-clamp-1 text-sm font-medium">{job.prompt}</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {formatDateTime(job.createdAt)}
           </p>
         </div>
-        <span
+        <ChevronRight
           className={cn(
-            "shrink-0 rounded-full px-2 py-1 text-xs font-medium",
-            job.status === "completed" && "bg-success-soft text-success",
-            active && "bg-warning-soft text-warning",
-            job.status === "failed" && "bg-destructive/10 text-destructive",
-            job.status === "cancelled" && "bg-muted text-muted-foreground",
+            "shrink-0 text-muted-foreground transition-transform",
+            expanded && "rotate-90",
           )}
-        >
-          {statusLabels[job.status]}
-        </span>
-      </div>
+          size={18}
+        />
+      </button>
 
-      {job.errorMessage ? (
+      {expanded && job.errorMessage ? (
         <p className="mt-2 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {job.errorMessage}
         </p>
       ) : null}
 
-      {images.length > 0 ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+      {expanded && images.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 px-3 pb-3">
           {images.map((image) => (
             <div
               className="relative aspect-square overflow-hidden rounded-2xl bg-muted"
@@ -402,7 +465,7 @@ function JobCard({ job }: { job: ImageGenerationJob }) {
         </div>
       ) : null}
 
-      <div className="mt-3 flex gap-2">
+      <div className="flex gap-2 border-t border-border/60 p-2">
         <Button
           className="h-9 flex-1 rounded-xl"
           disabled={refresh.isPending}
@@ -422,7 +485,28 @@ function JobCard({ job }: { job: ImageGenerationJob }) {
             <X size={15} />
             取消
           </Button>
-        ) : null}
+        ) : (
+          <>
+            <Button
+              className="h-9 flex-1 rounded-xl"
+              disabled={deleteJob.isPending}
+              variant="outline"
+              onClick={() => onRetry(job)}
+            >
+              <RefreshCw size={15} />
+              重试
+            </Button>
+            <Button
+              className="h-9 flex-1 rounded-xl text-destructive"
+              disabled={deleteJob.isPending}
+              variant="outline"
+              onClick={removeJob}
+            >
+              <Trash2 size={15} />
+              删除
+            </Button>
+          </>
+        )}
       </div>
     </article>
   );
@@ -449,6 +533,9 @@ export function ImageGeneratePage() {
   const [modelPickerOpen, setModelPickerOpen] = useState(false);
   const [qualityPickerOpen, setQualityPickerOpen] = useState(false);
   const [referencePickerOpen, setReferencePickerOpen] = useState(false);
+  const [expandedJobIds, setExpandedJobIds] = useState<Set<number>>(
+    () => new Set(),
+  );
 
   const models = config.data?.models ?? [];
   const selectedModel = useMemo(
@@ -530,7 +617,7 @@ export function ImageGeneratePage() {
       return;
     }
     try {
-      await submit.mutateAsync({
+      const created = await submit.mutateAsync({
         prompt,
         size,
         quality,
@@ -540,6 +627,7 @@ export function ImageGeneratePage() {
         materialIds: referenceMaterialIds,
         referenceImages: uploadedReferenceImages,
       });
+      setExpandedJobIds((prev) => new Set([...prev, created.job.id]));
       setPrompt("");
       setUploadedReferenceImages([]);
       setReferenceMaterialIds([]);
@@ -547,6 +635,37 @@ export function ImageGeneratePage() {
     } catch (error) {
       toast(error instanceof Error ? error.message : "提交失败", "error");
     }
+  }
+
+  async function retryJob(job: ImageGenerationJob) {
+    try {
+      const retried = await submit.mutateAsync({
+        prompt: job.prompt,
+        size: job.size as (typeof sizeOptions)[number]["value"],
+        quality: (job.quality ?? "medium") as QualityValue,
+        n: Math.max(1, Math.min(4, resultImages(job).length || 1)),
+        provider: job.provider,
+        model: job.model,
+        materialIds: [],
+        referenceImages: [],
+      });
+      setExpandedJobIds((prev) => new Set([...prev, retried.job.id]));
+      toast("已重新提交生图任务");
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "重试失败", "error");
+    }
+  }
+
+  function toggleJob(id: number) {
+    setExpandedJobIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   }
 
   const allJobs = jobs.data?.jobs ?? [];
@@ -724,7 +843,16 @@ export function ImageGeneratePage() {
         </div>
         <div className="space-y-3">
           {allJobs.map((job) => (
-            <JobCard job={job} key={job.id} />
+            <JobCard
+              expanded={
+                expandedJobIds.has(job.id) ||
+                ["queued", "in_progress"].includes(job.status)
+              }
+              job={job}
+              key={job.id}
+              onRetry={retryJob}
+              onToggle={() => toggleJob(job.id)}
+            />
           ))}
           {allJobs.length === 0 ? (
             <p className="rounded-2xl bg-card p-6 text-center text-sm text-muted-foreground">

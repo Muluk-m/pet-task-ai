@@ -327,6 +327,16 @@ export function useCancelImageJob() {
   });
 }
 
+export function useDeleteImageJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      api<{ ok: boolean }>(`/api/ai/image-jobs/${id}`, { method: "DELETE" }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["image-jobs"] }),
+  });
+}
+
 export function useSaveGeneratedImage(jobId: number) {
   const queryClient = useQueryClient();
   return useMutation({

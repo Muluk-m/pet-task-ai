@@ -742,6 +742,32 @@ ${platformPrompts[input.platform]}
 
     return c.json({ job: updated[0] });
   })
+  .delete("/image-jobs/:id", async (c) => {
+    const id = parsePositiveInt(c.req.param("id"));
+    if (!id) {
+      return c.json({ error: "Invalid job id" }, 400);
+    }
+
+    const db = c.get("db");
+    const [job] = await db
+      .select()
+      .from(imageGenerationJobs)
+      .where(
+        and(
+          eq(imageGenerationJobs.id, id),
+          eq(imageGenerationJobs.userId, c.get("userId")),
+        ),
+      );
+    if (!job) {
+      return c.notFound();
+    }
+    if (job.status === "queued" || job.status === "in_progress") {
+      return c.json({ error: "进行中的任务请先取消" }, 409);
+    }
+
+    await db.delete(imageGenerationJobs).where(eq(imageGenerationJobs.id, id));
+    return c.json({ ok: true });
+  })
   .get("/image-jobs/:id/image/:index", async (c) => {
     const baseUrl = queueBaseUrl();
     if (!baseUrl) {

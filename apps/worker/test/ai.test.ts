@@ -141,4 +141,27 @@ describe("AI image queue API", () => {
     expect(data.material.assetUrl).toContain("/api/materials/assets/");
     expect(data.material.assetMimeType).toBe("image/png");
   });
+
+  it("deletes a completed image job", async () => {
+    mockQueueFetch();
+    const created = await postJson("/api/ai/image-jobs", {
+      prompt: "可删除素材图",
+      provider: "openai-compat",
+      model: "gpt-image-2",
+      size: "1024x1024",
+    });
+    const { job } = (await created.json()) as { job: { id: number } };
+    await postJson(`/api/ai/image-jobs/${job.id}/refresh`, {});
+
+    const deleted = await request(`/api/ai/image-jobs/${job.id}`, {
+      method: "DELETE",
+    });
+    expect(deleted.status).toBe(200);
+
+    const list = await request("/api/ai/image-jobs");
+    const { jobs } = (await list.json()) as {
+      jobs: Array<{ id: number }>;
+    };
+    expect(jobs.some((item) => item.id === job.id)).toBe(false);
+  });
 });
