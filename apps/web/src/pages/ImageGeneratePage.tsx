@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Check,
   ChevronRight,
+  Download,
   ImagePlus,
   Loader2,
   Minus,
@@ -43,8 +44,12 @@ import {
   SheetTitle,
 } from "../components/ui/sheet";
 import { Textarea } from "../components/ui/textarea";
-import { formatDateTime } from "../lib/format";
-import { fileToCompressedDataUrl, thumbnailUrl } from "../lib/image";
+import { formatDateTime, parseDbDate } from "../lib/format";
+import {
+  downloadImage,
+  fileToCompressedDataUrl,
+  thumbnailUrl,
+} from "../lib/image";
 import { cn } from "../lib/utils";
 
 const sizeOptions = [
@@ -76,6 +81,42 @@ function selectedModelValue(model: ImageQueueModel) {
 
 function resultImages(job: ImageGenerationJob): ImageJobResultImage[] {
   return job.resultJson?.images ?? [];
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) {
+    return `${seconds}秒`;
+  }
+  return `${minutes}分${seconds.toString().padStart(2, "0")}秒`;
+}
+
+function jobStartedAt(job: ImageGenerationJob): number {
+  return job.submittedAt ?? parseDbDate(job.createdAt).getTime();
+}
+
+function jobDurationLabel(job: ImageGenerationJob, now: number): string {
+  const active = job.status === "queued" || job.status === "in_progress";
+  const end = active ? now : (job.completedAt ?? now);
+  const prefix = active ? "已用" : "耗时";
+  return `${prefix} ${formatDuration(end - jobStartedAt(job))}`;
+}
+
+function useNow(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [enabled]);
+
+  return now;
 }
 
 function QuantityStepper({
@@ -254,9 +295,11 @@ function ReferenceImageSheet({
 }
 
 function SaveGeneratedImageButton({
+  className,
   image,
   job,
 }: {
+  className?: string;
   image: ImageJobResultImage;
   job: ImageGenerationJob;
 }) {
@@ -264,7 +307,10 @@ function SaveGeneratedImageButton({
 
   return (
     <button
-      className="absolute bottom-2 right-2 rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm disabled:opacity-60"
+      className={cn(
+        "rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow-sm disabled:opacity-60",
+        className,
+      )}
       disabled={save.isPending}
       type="button"
       onClick={async () => {
@@ -286,14 +332,85 @@ function SaveGeneratedImageButton({
   );
 }
 
+function GeneratedImagePreview({
+  image,
+  job,
+  onClose,
+}: {
+  image: ImageJobResultImage;
+  job: ImageGenerationJob;
+  onClose: () => void;
+}) {
+  const imageUrl = `/api/ai/image-jobs/${job.id}/image/${image.index}`;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/90">
+      <button
+        aria-label="关闭预览"
+        className="absolute inset-0"
+        type="button"
+        onClick={onClose}
+      />
+      <div className="pointer-events-none relative flex h-full flex-col">
+        <div className="flex justify-end p-3 pt-safe">
+          <button
+            className="pointer-events-auto rounded-full bg-white/15 p-2 text-white"
+            type="button"
+            onClick={onClose}
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4">
+          <img
+            alt={image.revised_prompt ?? job.prompt}
+            className="pointer-events-auto max-h-full max-w-full rounded-xl object-contain"
+            src={imageUrl}
+          />
+        </div>
+        <div className="pointer-events-auto flex justify-center gap-3 p-6 pb-10">
+          <SaveGeneratedImageButton
+            className="px-5 py-2.5 text-sm"
+            image={image}
+            job={job}
+          />
+          <button
+            className="flex items-center gap-1.5 rounded-full bg-white/15 px-5 py-2.5 text-sm font-medium text-white active:scale-95"
+            type="button"
+            onClick={async () => {
+              try {
+                await downloadImage(
+                  imageUrl,
+                  `${job.prompt.slice(0, 24) || "generated-image"}.png`,
+                );
+                toast("已开始保存");
+              } catch (error) {
+                toast(
+                  error instanceof Error ? error.message : "保存失败",
+                  "error",
+                );
+              }
+            }}
+          >
+            <Download size={15} />
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function JobCard({
   expanded,
   job,
+  onPreview,
   onRetry,
   onToggle,
 }: {
   expanded: boolean;
   job: ImageGenerationJob;
+  onPreview: (job: ImageGenerationJob, image: ImageJobResultImage) => void;
   onRetry: (job: ImageGenerationJob) => void;
   onToggle: () => void;
 }) {
@@ -301,6 +418,8 @@ function JobCard({
   const cancel = useCancelImageJob();
   const deleteJob = useDeleteImageJob();
   const active = job.status === "queued" || job.status === "in_progress";
+  const now = useNow(active);
+  const durationLabel = jobDurationLabel(job, now);
   const images = resultImages(job);
   const firstImage = images[0];
 
@@ -362,7 +481,7 @@ function JobCard({
           </div>
           <p className="mt-1 line-clamp-1 text-sm font-medium">{job.prompt}</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {formatDateTime(job.createdAt)}
+            {formatDateTime(job.createdAt)} · {durationLabel}
           </p>
         </div>
         <ChevronRight
@@ -387,12 +506,23 @@ function JobCard({
               className="relative aspect-square overflow-hidden rounded-2xl bg-muted"
               key={image.index}
             >
-              <img
-                alt={image.revised_prompt ?? job.prompt}
-                className="size-full object-cover"
-                src={`/api/ai/image-jobs/${job.id}/image/${image.index}`}
+              <button
+                aria-label="预览生成图片"
+                className="block size-full"
+                type="button"
+                onClick={() => onPreview(job, image)}
+              >
+                <img
+                  alt={image.revised_prompt ?? job.prompt}
+                  className="size-full object-cover"
+                  src={`/api/ai/image-jobs/${job.id}/image/${image.index}`}
+                />
+              </button>
+              <SaveGeneratedImageButton
+                className="absolute bottom-2 right-2"
+                image={image}
+                job={job}
               />
-              <SaveGeneratedImageButton image={image} job={job} />
             </div>
           ))}
         </div>
@@ -469,6 +599,10 @@ export function ImageGeneratePage() {
   const [expandedJobIds, setExpandedJobIds] = useState<Set<number>>(
     () => new Set(),
   );
+  const [previewImage, setPreviewImage] = useState<{
+    job: ImageGenerationJob;
+    image: ImageJobResultImage;
+  } | null>(null);
 
   const models = useMemo(
     () =>
@@ -791,6 +925,9 @@ export function ImageGeneratePage() {
               }
               job={job}
               key={job.id}
+              onPreview={(previewJob, image) =>
+                setPreviewImage({ job: previewJob, image })
+              }
               onRetry={retryJob}
               onToggle={() => toggleJob(job.id)}
             />
@@ -835,6 +972,14 @@ export function ImageGeneratePage() {
           }
           onToggleMaterial={toggleReferenceMaterial}
           onUpload={addReferences}
+        />
+      ) : null}
+
+      {previewImage ? (
+        <GeneratedImagePreview
+          image={previewImage.image}
+          job={previewImage.job}
+          onClose={() => setPreviewImage(null)}
         />
       ) : null}
     </div>
