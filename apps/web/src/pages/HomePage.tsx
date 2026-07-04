@@ -67,10 +67,11 @@ function isWaitingCashback(task: TaskWithSteps): boolean {
   return pending.length > 0 && pending.every((s) => s.type === "cashback");
 }
 
-function taskNextAction(task: TaskWithSteps): {
+export function taskNextAction(task: TaskWithSteps): {
   firstPending: TaskWithSteps["steps"][number] | undefined;
   waitingCashback: boolean;
   waitingDelivery: boolean;
+  waitingReview: boolean;
   hasCashback: boolean;
 } {
   const sortedSteps = [...task.steps].sort((a, b) => a.id - b.id);
@@ -79,6 +80,7 @@ function taskNextAction(task: TaskWithSteps): {
     firstPending,
     waitingCashback: isWaitingCashback(task),
     waitingDelivery: firstPending?.type === "delivery",
+    waitingReview: firstPending?.type === "ecommerce_review",
     hasCashback: task.steps.some((s) => s.type === "cashback"),
   };
 }
@@ -165,6 +167,19 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
     toast(doneToast);
   }
 
+  async function completeReview(event: React.MouseEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    const step = task.steps.find(
+      (s) => s.type === "ecommerce_review" && s.status === "pending",
+    );
+    if (!step) {
+      return;
+    }
+    await completeStep.mutateAsync({ stepId: step.id });
+    toast("已完成好评环节");
+  }
+
   return (
     <Link
       className="block rounded-3xl border border-border/80 bg-card p-3.5 shadow-xs active:scale-[0.99]"
@@ -228,6 +243,15 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
           >
             确认收货
           </button>
+        ) : firstPending?.type === "ecommerce_review" ? (
+          <button
+            className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground active:scale-95"
+            disabled={completeStep.isPending}
+            type="button"
+            onClick={completeReview}
+          >
+            提交好评
+          </button>
         ) : null}
       </div>
     </Link>
@@ -235,16 +259,23 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
 }
 
 function TaskListItem({ task }: { task: TaskWithSteps }) {
-  const { firstPending, waitingCashback, waitingDelivery, hasCashback } =
-    taskNextAction(task);
+  const {
+    firstPending,
+    waitingCashback,
+    waitingDelivery,
+    waitingReview,
+    hasCashback,
+  } = taskNextAction(task);
   const deadline = deadlineBadgeText(task.deadline);
   const actionLabel = waitingCashback
     ? "待返现"
     : waitingDelivery
       ? "待收货"
-      : firstPending
-        ? (nextStepLabels[firstPending.type] ?? "待处理")
-        : "待处理";
+      : waitingReview
+        ? "待好评"
+        : firstPending
+          ? (nextStepLabels[firstPending.type] ?? "待处理")
+          : "待处理";
 
   return (
     <Link
@@ -296,7 +327,9 @@ function TaskListItem({ task }: { task: TaskWithSteps }) {
               ? "bg-secondary text-primary"
               : waitingCashback
                 ? "bg-warning-soft text-warning"
-                : "bg-destructive/10 text-destructive",
+                : waitingReview
+                  ? "bg-warning-soft text-warning"
+                  : "bg-destructive/10 text-destructive",
           )}
         >
           {actionLabel}
