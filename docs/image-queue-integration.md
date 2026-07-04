@@ -27,13 +27,13 @@ Configure `pt.config.json`:
 {
   "imageQueue": {
     "baseUrl": "https://image.nainma.online",
-    "defaultProvider": "openai-compat",
-    "defaultModel": "gpt-image-2",
+    "defaultProvider": "gemini",
+    "defaultModel": "gemini-3.1-flash-image",
     "models": [
       {
-        "provider": "openai-compat",
-        "model": "gpt-image-2",
-        "label": "GPT Image 2"
+        "provider": "gemini",
+        "model": "gemini-3.1-flash-image",
+        "label": "Nano Banana 2"
       }
     ]
   }
