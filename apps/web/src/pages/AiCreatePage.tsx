@@ -25,6 +25,10 @@ import {
   PlatformChipIcon,
   platformVisuals,
 } from "../components/bits";
+import {
+  MobileDateButton,
+  MobileDateSheet,
+} from "../components/mobile-date-picker";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -132,6 +136,7 @@ export function AiCreatePage() {
   const [ruleText, setRuleText] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [draft, setDraft] = useState<AiTaskExtraction | null>(null);
+  const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
 
   async function addImages(files: FileList | null) {
     if (!files || files.length === 0) {
@@ -394,13 +399,9 @@ export function AiCreatePage() {
                 iconClass="bg-secondary text-primary"
                 label="截止时间"
               >
-                <Input
-                  className="bg-muted/50 pr-9"
-                  type="date"
+                <MobileDateButton
                   value={draft.deadline ?? ""}
-                  onChange={(event) =>
-                    patch({ deadline: event.target.value || undefined })
-                  }
+                  onClick={() => setDeadlinePickerOpen(true)}
                 />
               </FieldRow>
             </div>
@@ -494,6 +495,12 @@ export function AiCreatePage() {
           </footer>
         </>
       ) : null}
+      <MobileDateSheet
+        open={deadlinePickerOpen}
+        value={draft?.deadline ?? ""}
+        onChange={(value) => patch({ deadline: value || undefined })}
+        onOpenChange={setDeadlinePickerOpen}
+      />
     </div>
   );
 }

@@ -10,6 +10,10 @@ import {
   useUpdateTask,
 } from "../api/client";
 import { ChannelPicker } from "../components/bits";
+import {
+  MobileDateButton,
+  MobileDateSheet,
+} from "../components/mobile-date-picker";
 import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -78,6 +82,7 @@ export function TaskFormPage() {
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
   const [existingCover, setExistingCover] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
 
   useEffect(() => {
     if (isEdit && data?.task && !loaded) {
@@ -273,11 +278,9 @@ export function TaskFormPage() {
               />
             </Field>
             <Field label="截止日期">
-              <Input
-                className="min-w-0"
-                type="date"
+              <MobileDateButton
                 value={deadline}
-                onChange={(event) => setDeadline(event.target.value)}
+                onClick={() => setDeadlinePickerOpen(true)}
               />
             </Field>
           </div>
@@ -358,6 +361,12 @@ export function TaskFormPage() {
           </div>
         </footer>
       </form>
+      <MobileDateSheet
+        open={deadlinePickerOpen}
+        value={deadline}
+        onChange={setDeadline}
+        onOpenChange={setDeadlinePickerOpen}
+      />
     </div>
   );
 }
