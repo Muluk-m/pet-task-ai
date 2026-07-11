@@ -17,7 +17,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - AI 一键创建：粘贴商家规则文字**或上传聊天截图（最多 3 张，前端 canvas 压缩为 JPEG data URL）** → `/api/ai/extract-task` 多模态结构化抽取（含每平台要求、置信度、存疑 notes）→ 预填表单人工确认 → 创建。gpt-5.6-sol 经此网关支持 image_url 图片输入。
 - 好评生成：选任务 + 选素材组合 + 平台（小红书/抖音/通用）+ 风格 + 字数 → `/api/ai/generate-review` 生成，存入 `generated_contents`。
 - 返现统计（我的页）：累计 / 本月 / 待回款，从任务数据前端聚合。
-- 任务编辑、归档与恢复（已归档列表在「我的」页）。
+- 任务编辑、归档与恢复（已归档列表在「我的」页）；任务一键复制（详情页菜单，预填字段与步骤开关并带走每平台 requirement，截止日/单号/封面不带）。
+- 笔记保留期提醒：完成小红书/抖音步骤时可填保留天数 → `task_steps.retain_until`（北京日历日），详情页显示「勿删」提示，每日 cron 对 [今天, 明天] 到期的步骤推送（归档任务除外，已完成任务仍提醒）。
+- 待回款催办：纯前端推导（active 且仅剩 cashback pending），首页徽标「已等 N 天」（≥7 天标红并排序提权），统计见「我的」页；逻辑在 `apps/web/src/lib/cashback.ts`。
+- 笔记步骤支持从剪贴板一键粘贴链接（`lib/links.ts` 正则抽取，排除全角引号等中文包裹符）。
 
 此外已实现：
 - **登录与用户隔离**：users 表 + 全数据表 user_id，Cookie 会话（HMAC 签名，30 天），除 `/api/health` 与 `/api/auth/*` 外全部 API 需登录。密码 PBKDF2 哈希（种子用户在迁移 0003 中）。
