@@ -223,6 +223,10 @@ export function TaskDetailPage() {
     }
   }, [expandedId, firstPendingId]);
 
+  useEffect(() => {
+    localStorage.setItem(draftsKey, JSON.stringify(drafts));
+  }, [drafts, draftsKey]);
+
   if (isLoading && !task) {
     return (
       <div className="mx-auto max-w-[560px] px-4 pt-6">
@@ -246,10 +250,6 @@ export function TaskDetailPage() {
 
   const setDraft = (stepId: number, value: string) =>
     setDrafts((prev) => ({ ...prev, [stepId]: value }));
-
-  useEffect(() => {
-    localStorage.setItem(draftsKey, JSON.stringify(drafts));
-  }, [drafts, draftsKey]);
 
   async function completeCurrentStep() {
     if (!expandedStep || expandedStep.status !== "pending") {
