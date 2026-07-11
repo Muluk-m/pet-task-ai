@@ -1,8 +1,9 @@
 import type { OrderChannel } from "@pet-task-ai/shared";
+import { NAME_MAX, RULE_TEXT_MAX, TITLE_MAX } from "@pet-task-ai/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ImagePlus, X } from "lucide-react";
 import { type FormEvent, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useNavigate, useParams, useSearchParams } from "react-router";
 import {
   uploadTaskCover,
   useCreateTask,
@@ -61,8 +62,12 @@ export function TaskFormPage() {
   const queryClient = useQueryClient();
   const editingId = params.taskId ? Number(params.taskId) : null;
   const isEdit = editingId !== null;
+  const [searchParams] = useSearchParams();
+  const fromParam = Number(searchParams.get("from"));
+  const copyFromId =
+    !isEdit && Number.isInteger(fromParam) && fromParam > 0 ? fromParam : null;
 
-  const { data } = useTask(isEdit ? editingId : null);
+  const { data } = useTask(isEdit ? editingId : copyFromId);
   const createTask = useCreateTask();
   const updateTask = useUpdateTask(editingId ?? 0);
 
@@ -81,27 +86,58 @@ export function TaskFormPage() {
   const [needCashback, setNeedCashback] = useState(true);
   const [coverDataUrl, setCoverDataUrl] = useState<string | null>(null);
   const [existingCover, setExistingCover] = useState<string | null>(null);
+  // 复制任务时随步骤开关带走的每平台要求文案（表单无输入项，随创建请求透传）
+  const [copiedRequirements, setCopiedRequirements] = useState<
+    Partial<Record<"xiaohongshu" | "douyin" | "review", string>>
+  >({});
   const [loaded, setLoaded] = useState(false);
   const [deadlinePickerOpen, setDeadlinePickerOpen] = useState(false);
 
   useEffect(() => {
-    if (isEdit && data?.task && !loaded) {
-      const task = data.task;
-      setTitle(task.title);
-      setMerchantName(task.merchantName ?? "");
-      setProductName(task.productName ?? "");
-      setCashbackAmount(
-        task.cashbackAmount != null ? String(task.cashbackAmount) : "",
-      );
+    if (!data?.task || loaded) {
+      return;
+    }
+    const task = data.task;
+    const applyCopiedSteps = () => {
+      const byType = new Map(task.steps.map((step) => [step.type, step]));
+      setNeedXhs(byType.has("xiaohongshu_note"));
+      setNeedDouyin(byType.has("douyin_post"));
+      setNeedReview(byType.has("ecommerce_review"));
+      setNeedCashback(byType.has("cashback"));
+      setCopiedRequirements({
+        xiaohongshu: byType.get("xiaohongshu_note")?.requirement ?? undefined,
+        douyin: byType.get("douyin_post")?.requirement ?? undefined,
+        review: byType.get("ecommerce_review")?.requirement ?? undefined,
+      });
+    };
+    if (!isEdit) {
+      // 复制模式冷缓存：数据到达前用户已开始输入的话，不覆盖文本内容；
+      // 步骤开关与 requirement 此刻不可能被用户「输入过」，照常回填
+      if (title !== "" || merchantName !== "" || productName !== "") {
+        applyCopiedSteps();
+        setLoaded(true);
+        return;
+      }
+    }
+    setTitle(task.title);
+    setMerchantName(task.merchantName ?? "");
+    setProductName(task.productName ?? "");
+    setCashbackAmount(
+      task.cashbackAmount != null ? String(task.cashbackAmount) : "",
+    );
+    setRuleText(task.ruleText ?? "");
+    setOrderChannel((task.orderChannel as OrderChannel) ?? "other");
+    if (isEdit) {
       setDeadline(task.deadline ?? "");
-      setRuleText(task.ruleText ?? "");
       setTrackingNo(task.trackingNo ?? "");
       setNote(task.note ?? "");
-      setOrderChannel((task.orderChannel as OrderChannel) ?? "other");
       setExistingCover(task.coverImageUrl);
-      setLoaded(true);
+    } else {
+      // 复制任务：步骤开关与每平台要求从源任务带走；截止日/单号/备注/封面每单独有，不带
+      applyCopiedSteps();
     }
-  }, [isEdit, data, loaded]);
+    setLoaded(true);
+  }, [isEdit, data, loaded, title, merchantName, productName]);
 
   async function pickCover(file: File | null) {
     if (!file) {
@@ -167,6 +203,11 @@ export function TaskFormPage() {
           requiresXiaohongshu: needXhs,
           requiresDouyin: needDouyin,
           requiresReview: needReview,
+          xiaohongshuRequirement: needXhs
+            ? copiedRequirements.xiaohongshu
+            : undefined,
+          douyinRequirement: needDouyin ? copiedRequirements.douyin : undefined,
+          reviewRequirement: needReview ? copiedRequirements.review : undefined,
           orderChannel,
           requiresCashback: needCashback,
         });
@@ -243,6 +284,7 @@ export function TaskFormPage() {
 
           <Field label="任务标题 *">
             <Input
+              maxLength={TITLE_MAX}
               placeholder="如：全价冻干狗粮 1.5kg"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
@@ -250,6 +292,7 @@ export function TaskFormPage() {
           </Field>
           <Field label="商家名称">
             <Input
+              maxLength={NAME_MAX}
               placeholder="如：萌宠优选"
               value={merchantName}
               onChange={(event) => setMerchantName(event.target.value)}
@@ -257,6 +300,7 @@ export function TaskFormPage() {
           </Field>
           <Field label="商品名称">
             <Input
+              maxLength={NAME_MAX}
               placeholder="如：全价冻干狗粮"
               value={productName}
               onChange={(event) => setProductName(event.target.value)}
@@ -294,6 +338,7 @@ export function TaskFormPage() {
           </Field>
           <Field label="商家规则原文">
             <Textarea
+              maxLength={RULE_TEXT_MAX}
               placeholder="粘贴商家发的活动规则，方便随时查看"
               rows={4}
               value={ruleText}

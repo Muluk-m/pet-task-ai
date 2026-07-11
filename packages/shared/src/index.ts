@@ -116,6 +116,15 @@ const aiModelRefSchema = z
   .max(160)
   .optional();
 
+/**
+ * 已下线模型的等价档替换（modelId → modelId）：存量偏好（localStorage / 请求参数）
+ * 静默映射到同档新模型，避免失效 ref 回退到默认速度档、质量档用户被降级。
+ * worker 端解析 ref 与 web 端设置页清理都必须用同一份映射。
+ */
+export const LEGACY_MODEL_ALIASES: Record<string, string> = {
+  "gpt-5.5": "gpt-5.6-sol",
+};
+
 const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "日期格式应为 YYYY-MM-DD");
@@ -127,30 +136,37 @@ const cashbackAmountSchema = z
     message: "返现金额最多保留 1 位小数",
   });
 
+// 自由文本上限：防止超大 body 打满 D1 / 拖垮 AI 抽取，数值给足正常使用余量。
+// export 供前端表单 maxLength 引用同一来源，避免两端限制漂移。
+export const TITLE_MAX = 200;
+export const NAME_MAX = 200;
+export const RULE_TEXT_MAX = 10_000;
+export const REQUIREMENT_MAX = 10_000;
+
 export const createTaskSchema = z.object({
-  title: z.string().min(1),
-  merchantName: z.string().optional(),
-  productName: z.string().optional(),
-  ruleText: z.string().optional(),
+  title: z.string().min(1).max(TITLE_MAX),
+  merchantName: z.string().max(NAME_MAX).optional(),
+  productName: z.string().max(NAME_MAX).optional(),
+  ruleText: z.string().max(RULE_TEXT_MAX).optional(),
   deadline: dateStringSchema.optional(),
   requiresXiaohongshu: z.boolean().default(false),
   requiresDouyin: z.boolean().default(false),
   requiresReview: z.boolean().default(false),
   requiresCashback: z.boolean().default(true),
   cashbackAmount: cashbackAmountSchema.optional(),
-  xiaohongshuRequirement: z.string().optional(),
-  douyinRequirement: z.string().optional(),
-  reviewRequirement: z.string().optional(),
+  xiaohongshuRequirement: z.string().max(REQUIREMENT_MAX).optional(),
+  douyinRequirement: z.string().max(REQUIREMENT_MAX).optional(),
+  reviewRequirement: z.string().max(REQUIREMENT_MAX).optional(),
   trackingNo: z.string().max(64).optional(),
   note: z.string().max(2000).optional(),
   orderChannel: orderChannelSchema.optional(),
 });
 
 export const updateTaskSchema = z.object({
-  title: z.string().min(1).optional(),
-  merchantName: z.string().nullable().optional(),
-  productName: z.string().nullable().optional(),
-  ruleText: z.string().nullable().optional(),
+  title: z.string().min(1).max(TITLE_MAX).optional(),
+  merchantName: z.string().max(NAME_MAX).nullable().optional(),
+  productName: z.string().max(NAME_MAX).nullable().optional(),
+  ruleText: z.string().max(RULE_TEXT_MAX).nullable().optional(),
   deadline: dateStringSchema.nullable().optional(),
   cashbackAmount: cashbackAmountSchema.nullable().optional(),
   trackingNo: z.string().max(64).nullable().optional(),
@@ -161,6 +177,8 @@ export const updateTaskSchema = z.object({
 export const completeStepSchema = z.object({
   resultUrl: z.string().url().optional(),
   resultText: z.string().optional(),
+  // 笔记/视频保留天数：完成时按完成日 + 天数算出保留期截止日写入 retain_until
+  retainDays: z.number().int().min(1).max(365).optional(),
 });
 
 export const reorderStepsSchema = z.object({
@@ -169,8 +187,8 @@ export const reorderStepsSchema = z.object({
 
 export const addStepSchema = z.object({
   type: taskStepTypeSchema,
-  title: z.string().min(1).optional(),
-  requirement: z.string().optional(),
+  title: z.string().min(1).max(TITLE_MAX).optional(),
+  requirement: z.string().max(REQUIREMENT_MAX).optional(),
   platform: orderChannelSchema.optional(),
 });
 
@@ -181,7 +199,7 @@ const imageDataUrlSchema = z
 
 export const aiExtractInputSchema = z
   .object({
-    ruleText: z.string().optional(),
+    ruleText: z.string().max(RULE_TEXT_MAX).optional(),
     images: z.array(imageDataUrlSchema).max(3, "最多上传 3 张截图").optional(),
     aiModel: aiModelRefSchema,
   })

@@ -1,3 +1,5 @@
+import { fetchTextWithTimeout } from "./http";
+
 const encoder = new TextEncoder();
 
 function base64UrlEncode(bytes: ArrayBuffer | Uint8Array): string {
@@ -72,17 +74,23 @@ export async function sendPushNotification(
     vapid.privateKeyPkcs8Base64,
   );
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      TTL: "86400",
-      Urgency: "normal",
-      Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
+  // 10s 超时：cron 按批并发发送，单个挂起的 endpoint 不能卡住整批
+  const result = await fetchTextWithTimeout(
+    endpoint,
+    {
+      method: "POST",
+      headers: {
+        TTL: "86400",
+        Urgency: "normal",
+        Authorization: `vapid t=${jwt}, k=${vapid.publicKey}`,
+      },
     },
-  });
+    10_000,
+    "Web Push 发送",
+  );
 
-  if (response.status === 404 || response.status === 410) {
+  if (result.status === 404 || result.status === 410) {
     return "gone";
   }
-  return response.ok || response.status === 201 ? "ok" : "error";
+  return result.ok || result.status === 201 ? "ok" : "error";
 }

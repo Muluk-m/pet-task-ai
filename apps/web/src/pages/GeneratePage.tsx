@@ -331,6 +331,8 @@ function MaterialPickerSheet({
                     <img
                       alt={material.title}
                       className="size-full object-cover"
+                      decoding="async"
+                      loading="lazy"
                       src={thumbnailUrl(material.assetUrl, 240)}
                     />
                   ) : (

@@ -1,5 +1,11 @@
 import { relations, sql } from "drizzle-orm";
-import { integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  index,
+  integer,
+  real,
+  sqliteTable,
+  text,
+} from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -10,53 +16,71 @@ export const users = sqliteTable("users", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
-export const tasks = sqliteTable("tasks", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  userId: integer("user_id").references(() => users.id),
-  title: text("title").notNull(),
-  merchantName: text("merchant_name"),
-  productName: text("product_name"),
-  ruleText: text("rule_text"),
-  status: text("status", { enum: ["active", "completed", "archived"] })
-    .notNull()
-    .default("active"),
-  cashbackAmount: real("cashback_amount"),
-  deadline: text("deadline"),
-  coverImageUrl: text("cover_image_url"),
-  trackingNo: text("tracking_no"),
-  note: text("note"),
-  orderChannel: text("order_channel"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-  completedAt: text("completed_at"),
-});
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id").references(() => users.id),
+    title: text("title").notNull(),
+    merchantName: text("merchant_name"),
+    productName: text("product_name"),
+    ruleText: text("rule_text"),
+    status: text("status", { enum: ["active", "completed", "archived"] })
+      .notNull()
+      .default("active"),
+    cashbackAmount: real("cashback_amount"),
+    deadline: text("deadline"),
+    coverImageUrl: text("cover_image_url"),
+    trackingNo: text("tracking_no"),
+    note: text("note"),
+    orderChannel: text("order_channel"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    // 任务列表按 user_id (+ status) 过滤；每日推送 cron 按 status + deadline 过滤（前导列必须是 status，与查询谓词一致）
+    index("tasks_user_status_idx").on(table.userId, table.status),
+    index("tasks_status_deadline_idx").on(table.status, table.deadline),
+  ],
+);
 
-export const taskSteps = sqliteTable("task_steps", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  taskId: integer("task_id")
-    .notNull()
-    .references(() => tasks.id, { onDelete: "cascade" }),
-  type: text("type", {
-    enum: [
-      "delivery",
-      "xiaohongshu_note",
-      "douyin_post",
-      "ecommerce_review",
-      "cashback",
-    ],
-  }).notNull(),
-  title: text("title").notNull(),
-  requirement: text("requirement"),
-  platform: text("platform"),
-  status: text("status", { enum: ["pending", "completed"] })
-    .notNull()
-    .default("pending"),
-  sortOrder: integer("sort_order").notNull().default(0),
-  resultUrl: text("result_url"),
-  resultText: text("result_text"),
-  completedAt: text("completed_at"),
-  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
-});
+export const taskSteps = sqliteTable(
+  "task_steps",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    taskId: integer("task_id")
+      .notNull()
+      .references(() => tasks.id, { onDelete: "cascade" }),
+    type: text("type", {
+      enum: [
+        "delivery",
+        "xiaohongshu_note",
+        "douyin_post",
+        "ecommerce_review",
+        "cashback",
+      ],
+    }).notNull(),
+    title: text("title").notNull(),
+    requirement: text("requirement"),
+    platform: text("platform"),
+    status: text("status", { enum: ["pending", "completed"] })
+      .notNull()
+      .default("pending"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    resultUrl: text("result_url"),
+    resultText: text("result_text"),
+    // 笔记/视频保留期截止日（YYYY-MM-DD 裸日历日，可空）：置换规则常要求
+    // 保留 15/30 天不得删除，否则不返现。完成步骤时按完成日 + 保留天数写入。
+    retainUntil: text("retain_until"),
+    completedAt: text("completed_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    // 每日 cron 扫「保留期明天到期」的步骤：谓词是 retain_until = ?
+    index("task_steps_retain_until_idx").on(table.retainUntil),
+  ],
+);
 
 export const materials = sqliteTable("materials", {
   id: integer("id").primaryKey({ autoIncrement: true }),

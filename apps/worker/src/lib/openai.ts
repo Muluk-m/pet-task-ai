@@ -1,3 +1,17 @@
+import { fetchTextWithTimeout } from "./http";
+
+// 上游超时：网关偶发挂起时不拖死整个请求，超时后由调用方的重试/降级逻辑接住
+const CHAT_TIMEOUT_MS = 60_000;
+const IMAGE_TIMEOUT_MS = 120_000;
+
+function parseJsonResponse<T>(text: string, label: string): T {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(`${label}返回了非 JSON 内容: ${text.slice(0, 200)}`);
+  }
+}
+
 export type ChatUserContent =
   | string
   | Array<
@@ -13,6 +27,8 @@ type ChatOptions = {
   user: ChatUserContent;
   jsonMode?: boolean;
   temperature?: number;
+  /** 多模态抽取等慢路径可放宽，默认 60s */
+  timeoutMs?: number;
 };
 
 type ChatCompletionResponse = {
@@ -21,7 +37,7 @@ type ChatCompletionResponse = {
 };
 
 export async function chatComplete(options: ChatOptions): Promise<string> {
-  const response = await fetch(
+  const result = await fetchTextWithTimeout(
     `${options.baseUrl.replace(/\/$/, "")}/chat/completions`,
     {
       method: "POST",
@@ -41,16 +57,20 @@ export async function chatComplete(options: ChatOptions): Promise<string> {
           : {}),
       }),
     },
+    options.timeoutMs ?? CHAT_TIMEOUT_MS,
+    "AI 网关请求",
   );
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
+  if (!result.ok) {
     throw new Error(
-      `AI 网关请求失败 (${response.status}): ${detail.slice(0, 300)}`,
+      `AI 网关请求失败 (${result.status}): ${result.text.slice(0, 300)}`,
     );
   }
 
-  const data = (await response.json()) as ChatCompletionResponse;
+  const data = parseJsonResponse<ChatCompletionResponse>(
+    result.text,
+    "AI 网关",
+  );
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
@@ -98,7 +118,7 @@ export async function generateImage(
   const base = options.baseUrl.replace(/\/$/, "").replace(/\/v1$/, "");
   const headers = { authorization: `Bearer ${options.apiKey}` };
 
-  let response: Response;
+  let result: Awaited<ReturnType<typeof fetchTextWithTimeout>>;
   if (options.references && options.references.length > 0) {
     const form = new FormData();
     form.append("model", IMAGE_MODEL);
@@ -109,33 +129,42 @@ export async function generateImage(
     options.references.forEach((blob, index) => {
       form.append("image", blob, `ref-${index}.png`);
     });
-    response = await fetch(`${base}/images/edits`, {
-      method: "POST",
-      headers,
-      body: form,
-    });
+    result = await fetchTextWithTimeout(
+      `${base}/images/edits`,
+      {
+        method: "POST",
+        headers,
+        body: form,
+      },
+      IMAGE_TIMEOUT_MS,
+      "生图请求",
+    );
   } else {
-    response = await fetch(`${base}/images/generations`, {
-      method: "POST",
-      headers: { ...headers, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: IMAGE_MODEL,
-        prompt: options.prompt,
-        size: options.size,
-        quality: "medium",
-        n: 1,
-      }),
-    });
-  }
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `生图请求失败 (${response.status}): ${detail.slice(0, 300)}`,
+    result = await fetchTextWithTimeout(
+      `${base}/images/generations`,
+      {
+        method: "POST",
+        headers: { ...headers, "content-type": "application/json" },
+        body: JSON.stringify({
+          model: IMAGE_MODEL,
+          prompt: options.prompt,
+          size: options.size,
+          quality: "medium",
+          n: 1,
+        }),
+      },
+      IMAGE_TIMEOUT_MS,
+      "生图请求",
     );
   }
 
-  const data = (await response.json()) as ImagesResponse;
+  if (!result.ok) {
+    throw new Error(
+      `生图请求失败 (${result.status}): ${result.text.slice(0, 300)}`,
+    );
+  }
+
+  const data = parseJsonResponse<ImagesResponse>(result.text, "生图接口");
   const b64 = data.data?.[0]?.b64_json;
   if (!b64) {
     throw new Error(data.error?.message ?? "生图返回为空");

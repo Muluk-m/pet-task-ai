@@ -28,7 +28,12 @@ import {
   platformVisuals,
 } from "../components/bits";
 import { toast } from "../components/toast";
-import { formatMoney } from "../lib/format";
+import {
+  CASHBACK_WAIT_ALERT_DAYS,
+  cashbackWaitDays,
+  isWaitingCashback,
+} from "../lib/cashback";
+import { deadlineInfo, formatMoney } from "../lib/format";
 import { cn } from "../lib/utils";
 
 function greeting(): string {
@@ -56,16 +61,34 @@ const nextStepLabels: Record<string, string> = {
   cashback: "确认返现",
 };
 
+/**
+ * 首页进行中任务的紧急度分组（越小越靠前，组内再按截止日升序）：
+ * 0 逾期最紧迫；1 临期(≤3天)或待回款催办(等待≥阈值天)同级；2 其余。
+ * 逾期>临期的既有优先级不变，只把「等待过久的待回款」提升到临期同级。
+ */
+function urgencyRank(task: TaskWithSteps): number {
+  if (task.deadline) {
+    const { tone } = deadlineInfo(task.deadline);
+    if (tone === "overdue") {
+      return 0;
+    }
+    if (tone === "soon") {
+      return 1;
+    }
+  }
+  const waitDays = cashbackWaitDays(task);
+  if (waitDays != null && waitDays >= CASHBACK_WAIT_ALERT_DAYS) {
+    return 1;
+  }
+  return 2;
+}
+
 const TASK_VIEW_STORAGE_KEY = "pet-task-home-view";
 const LIST_ROW_HEIGHT = 84;
 const LIST_OVERSCAN = 8;
+const CARD_PAGE_SIZE = 20;
 
 type TaskViewMode = "card" | "list";
-
-function isWaitingCashback(task: TaskWithSteps): boolean {
-  const pending = task.steps.filter((s) => s.status === "pending");
-  return pending.length > 0 && pending.every((s) => s.type === "cashback");
-}
 
 export function taskNextAction(task: TaskWithSteps): {
   firstPending: TaskWithSteps["steps"][number] | undefined;
@@ -89,22 +112,30 @@ function TaskActionBadge({
   firstPending,
   waitingCashback,
   waitingDelivery,
+  waitDays,
   className,
 }: Pick<
   ReturnType<typeof taskNextAction>,
   "firstPending" | "waitingCashback" | "waitingDelivery"
 > & {
+  waitDays?: number | null;
   className?: string;
 }) {
   if (waitingCashback) {
+    const overdue = waitDays != null && waitDays >= CASHBACK_WAIT_ALERT_DAYS;
     return (
       <span
         className={cn(
-          "rounded-lg bg-warning-soft px-2.5 py-1 text-xs font-medium text-warning",
+          "rounded-lg px-2.5 py-1 text-xs font-medium",
+          overdue
+            ? "bg-destructive/10 text-destructive"
+            : "bg-warning-soft text-warning",
           className,
         )}
       >
-        最后一步：确认返现
+        {waitDays != null
+          ? `待回款 · 已等 ${waitDays} 天`
+          : "最后一步：确认返现"}
       </span>
     );
   }
@@ -163,8 +194,12 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
     if (!step) {
       return;
     }
-    await completeStep.mutateAsync({ stepId: step.id });
-    toast(doneToast);
+    try {
+      await completeStep.mutateAsync({ stepId: step.id });
+      toast(doneToast);
+    } catch {
+      // 失败提示已由 useStepMutation 的 onError 统一弹出
+    }
   }
 
   async function completeReview(event: React.MouseEvent) {
@@ -176,8 +211,12 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
     if (!step) {
       return;
     }
-    await completeStep.mutateAsync({ stepId: step.id });
-    toast("已完成好评环节");
+    try {
+      await completeStep.mutateAsync({ stepId: step.id });
+      toast("已完成好评环节");
+    } catch {
+      // 失败提示已由 useStepMutation 的 onError 统一弹出
+    }
   }
 
   return (
@@ -220,6 +259,7 @@ function TaskCard({ task }: { task: TaskWithSteps }) {
         <TaskActionBadge
           className="max-w-full truncate text-[10px]"
           firstPending={firstPending}
+          waitDays={cashbackWaitDays(task)}
           waitingCashback={waitingCashback}
           waitingDelivery={waitingDelivery}
         />
@@ -267,8 +307,13 @@ function TaskListItem({ task }: { task: TaskWithSteps }) {
     hasCashback,
   } = taskNextAction(task);
   const deadline = deadlineBadgeText(task.deadline);
+  const waitDays = cashbackWaitDays(task);
+  const cashbackOverdue =
+    waitDays != null && waitDays >= CASHBACK_WAIT_ALERT_DAYS;
   const actionLabel = waitingCashback
-    ? "待返现"
+    ? waitDays != null
+      ? `已等 ${waitDays} 天`
+      : "待返现"
     : waitingDelivery
       ? "待收货"
       : waitingReview
@@ -326,7 +371,9 @@ function TaskListItem({ task }: { task: TaskWithSteps }) {
             waitingDelivery
               ? "bg-secondary text-primary"
               : waitingCashback
-                ? "bg-warning-soft text-warning"
+                ? cashbackOverdue
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-warning-soft text-warning"
                 : waitingReview
                   ? "bg-warning-soft text-warning"
                   : "bg-destructive/10 text-destructive",
@@ -395,6 +442,49 @@ function VirtualTaskList({ tasks }: { tasks: TaskWithSteps[] }) {
   );
 }
 
+/**
+ * 卡片模式分批渲染：初始一批，触底哨兵进入视口再追加一批，不引入虚拟化依赖。
+ * 搜索/排序变化时由父组件换 key 重挂来重置展开量——不能依赖 tasks 引用重置，
+ * 乐观更新/refetch 都会换引用，会把用户已滚动展开的列表折回去。
+ */
+function PaginatedTaskCards({ tasks }: { tasks: TaskWithSteps[] }) {
+  const [visibleCount, setVisibleCount] = useState(CARD_PAGE_SIZE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const hasMore = visibleCount < tasks.length;
+
+  useEffect(() => {
+    if (!hasMore) {
+      return;
+    }
+    const sentinel = sentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCount((count) =>
+            Math.min(count + CARD_PAGE_SIZE, tasks.length),
+          );
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, tasks.length]);
+
+  return (
+    <>
+      {tasks.slice(0, visibleCount).map((task) => (
+        <TaskCard key={task.id} task={task} />
+      ))}
+      {hasMore ? <div ref={sentinelRef} className="h-1" /> : null}
+    </>
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const { data, isLoading } = useTasks();
@@ -430,6 +520,10 @@ export function HomePage() {
       .filter((task) => task.status === "active" && matches(task))
       .sort((a, b) => {
         if (sortBy === "deadline") {
+          const rankDiff = urgencyRank(a) - urgencyRank(b);
+          if (rankDiff !== 0) {
+            return rankDiff;
+          }
           const da = a.deadline ?? "9999-99-99";
           const db = b.deadline ?? "9999-99-99";
           return da.localeCompare(db);
@@ -633,7 +727,10 @@ export function HomePage() {
         {taskView === "list" ? (
           <VirtualTaskList tasks={activeTasks} />
         ) : (
-          activeTasks.map((task) => <TaskCard key={task.id} task={task} />)
+          <PaginatedTaskCards
+            key={`${sortBy}:${keyword}`}
+            tasks={activeTasks}
+          />
         )}
         {!isLoading && activeTasks.length === 0 ? (
           <div className="flex flex-col items-center gap-3 rounded-3xl bg-card py-12 text-muted-foreground">

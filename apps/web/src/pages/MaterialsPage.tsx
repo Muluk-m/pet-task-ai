@@ -148,7 +148,8 @@ function MaterialCard({
           <img
             alt={material.title}
             className="aspect-square w-full object-cover"
-            decoding="sync"
+            decoding="async"
+            loading="lazy"
             src={thumbnailUrl(assetUrl, 400)}
           />
         </button>

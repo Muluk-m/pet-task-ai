@@ -45,26 +45,33 @@ const urlRequiredStepTypes = new Set<string>([
   "douyin_post",
 ]);
 
+// 任务完成判定唯一入口：pending 为 0 且有已完成步骤 → completed；有 pending → 回退 active；
+// archived 不重算。一次 LEFT JOIN 聚合拿回 task 状态与步骤计数，最多一次条件 UPDATE。
 async function recomputeTaskStatus(db: Db, taskId: number) {
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, taskId));
-  if (!task || task.status === "archived") {
+  const [row] = await db
+    .select({
+      status: tasks.status,
+      pending: sql<number>`sum(case when ${taskSteps.status} = 'pending' then 1 else 0 end)`,
+      completed: sql<number>`sum(case when ${taskSteps.status} = 'completed' then 1 else 0 end)`,
+    })
+    .from(tasks)
+    .leftJoin(taskSteps, eq(taskSteps.taskId, tasks.id))
+    .where(eq(tasks.id, taskId))
+    .groupBy(tasks.id);
+
+  if (!row || row.status === "archived") {
     return;
   }
 
-  const steps = await db
-    .select({ status: taskSteps.status })
-    .from(taskSteps)
-    .where(eq(taskSteps.taskId, taskId));
+  const pending = row.pending ?? 0;
+  const completed = row.completed ?? 0;
 
-  const pending = steps.filter((s) => s.status === "pending").length;
-  const completed = steps.filter((s) => s.status === "completed").length;
-
-  if (pending === 0 && completed > 0 && task.status !== "completed") {
+  if (pending === 0 && completed > 0 && row.status !== "completed") {
     await db
       .update(tasks)
       .set({ status: "completed", completedAt: sql`CURRENT_TIMESTAMP` })
       .where(eq(tasks.id, taskId));
-  } else if (pending > 0 && task.status === "completed") {
+  } else if (pending > 0 && row.status === "completed") {
     await db
       .update(tasks)
       .set({ status: "active", completedAt: null })
@@ -75,6 +82,17 @@ async function recomputeTaskStatus(db: Db, taskId: number) {
 function parseId(value: string) {
   const id = Number(value);
   return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+/**
+ * 保留期截止日（YYYY-MM-DD）：以完成日的北京日历日为基准 + 保留天数。
+ * 与 cron 的 deadlineThreshold、前端本地日历日同口径（产品面向北京时区用户）——
+ * 若用 UTC 日历日，北京 00:00-08:00 完成的步骤到期日会比用户认知早一天。
+ */
+function retainUntilDate(days: number, now = Date.now()): string {
+  return new Date(now + 8 * 3600_000 + days * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
 }
 
 async function getOwnedTask(db: Db, taskId: number, userId: number) {
@@ -442,6 +460,9 @@ export const tasksRouter = new Hono<Env>()
           status: "completed",
           resultUrl: input.resultUrl ?? null,
           resultText: input.resultText ?? null,
+          retainUntil: input.retainDays
+            ? retainUntilDate(input.retainDays)
+            : null,
           completedAt: sql`CURRENT_TIMESTAMP`,
         })
         .where(eq(taskSteps.id, stepId));
@@ -478,6 +499,7 @@ export const tasksRouter = new Hono<Env>()
         status: "pending",
         resultUrl: null,
         resultText: null,
+        retainUntil: null,
         completedAt: null,
       })
       .where(eq(taskSteps.id, stepId));

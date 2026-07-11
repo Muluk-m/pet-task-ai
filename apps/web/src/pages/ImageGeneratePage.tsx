@@ -272,6 +272,8 @@ function ReferenceImageSheet({
                     <img
                       alt={material.title}
                       className="size-full object-cover"
+                      decoding="async"
+                      loading="lazy"
                       src={thumbnailUrl(assetUrl, 240)}
                     />
                     {selected ? (
@@ -450,6 +452,8 @@ function JobCard({
             <img
               alt={firstImage.revised_prompt ?? job.prompt}
               className="size-full object-cover"
+              decoding="async"
+              loading="lazy"
               src={`/api/ai/image-jobs/${job.id}/image/${firstImage.index}`}
             />
           ) : (
@@ -516,6 +520,8 @@ function JobCard({
                 <img
                   alt={image.revised_prompt ?? job.prompt}
                   className="size-full object-cover"
+                  decoding="async"
+                  loading="lazy"
                   src={`/api/ai/image-jobs/${job.id}/image/${image.index}`}
                 />
               </button>

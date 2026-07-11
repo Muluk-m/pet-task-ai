@@ -12,8 +12,8 @@
             "description": "速度优先，适合文案生成和文本规则识别"
           },
           {
-            "id": "gpt-5.5",
-            "label": "GPT 5.5",
+            "id": "gpt-5.6-sol",
+            "label": "GPT 5.6 Sol",
             "description": "质量优先，适合截图识别和复杂规则抽取",
             "supportsVision": true
           }

@@ -16,7 +16,9 @@ import type {
   UpdateTaskInput,
 } from "@pet-task-ai/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "../components/toast";
 import { getSelectedAiModel } from "../lib/ai-model";
+import { toDbTimestamp } from "../lib/format";
 import type {
   AiModelConfig,
   GeneratedContent,
@@ -24,6 +26,8 @@ import type {
   ImageQueueConfig,
   Material,
   Task,
+  TaskStatus,
+  TaskStep,
   TaskWithSteps,
 } from "./types";
 
@@ -36,16 +40,36 @@ export type CurrentUser = {
   avatarUrl: string | null;
 };
 
+function extractErrorMessage(data: unknown, status: number): string {
+  if (data && typeof data === "object" && "error" in data) {
+    const err = (data as { error: unknown }).error;
+    if (typeof err === "string") {
+      return err;
+    }
+    // zValidator 默认 400 的 error 是序列化的 ZodError，取第一条 issue 而不是 [object Object]
+    if (err && typeof err === "object") {
+      const issues = (
+        err as { issues?: Array<{ message?: string; path?: unknown[] }> }
+      ).issues;
+      const first = issues?.[0];
+      if (first?.message) {
+        const path =
+          Array.isArray(first.path) && first.path.length > 0
+            ? `${first.path.join(".")}: `
+            : "";
+        return `${path}${first.message}`;
+      }
+    }
+  }
+  return `请求失败 (${status})`;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, init);
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const message =
-      data && typeof data === "object" && "error" in data
-        ? String((data as { error: unknown }).error)
-        : `请求失败 (${res.status})`;
-    throw new Error(message);
+    throw new Error(extractErrorMessage(data, res.status));
   }
 
   return data as T;
@@ -77,6 +101,16 @@ export function useMe() {
   });
 }
 
+/**
+ * 登录/注册后刷新当前用户的所有数据：["me"] 已由响应直接写入，无需重拉；
+ * 其余用户数据 query 精确失效即可，避免无参 invalidateQueries() 连带重发 ["me"] 造成瀑布。
+ */
+function invalidateUserData(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] !== "me",
+  });
+}
+
 export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -84,7 +118,7 @@ export function useLogin() {
       postJson<{ user: CurrentUser }>("/api/auth/login", input),
     onSuccess: (data) => {
       queryClient.setQueryData(["me"], data.user);
-      queryClient.invalidateQueries();
+      invalidateUserData(queryClient);
     },
   });
 }
@@ -96,7 +130,7 @@ export function useRegister() {
       postJson<{ user: CurrentUser }>("/api/auth/register", input),
     onSuccess: (data) => {
       queryClient.setQueryData(["me"], data.user);
-      queryClient.invalidateQueries();
+      invalidateUserData(queryClient);
     },
   });
 }
@@ -163,6 +197,99 @@ function useInvalidateTasks() {
   return () => queryClient.invalidateQueries({ queryKey: ["tasks"] });
 }
 
+/** 乐观地把单个 step 改成目标状态，并按剩余 pending 步骤同步任务展示状态（最终仍以服务端 recomputeTaskStatus 为准） */
+function applyStepMutation(
+  task: TaskWithSteps,
+  stepId: number,
+  patch: Partial<TaskStep>,
+): TaskWithSteps {
+  const steps = task.steps.map((step) =>
+    step.id === stepId ? { ...step, ...patch } : step,
+  );
+  const hasPending = steps.some((step) => step.status === "pending");
+  const hasCompleted = steps.some((step) => step.status === "completed");
+  // 归档任务不参与自动完成判定；其余按剩余 pending 推导 active/completed
+  const status: TaskStatus =
+    task.status === "archived"
+      ? task.status
+      : !hasPending && hasCompleted
+        ? "completed"
+        : "active";
+  // completedAt 与 status 同步预测（服务端 recomputeTaskStatus 也会同步写/清），
+  // 否则「本月返现」等依赖 completedAt 的统计在乐观窗口内会漏计/多计
+  const completedAt =
+    task.status === "archived"
+      ? task.completedAt
+      : status === "completed"
+        ? (task.completedAt ?? toDbTimestamp())
+        : null;
+  return { ...task, steps, status, completedAt };
+}
+
+/**
+ * 高频步骤操作的乐观更新：先本地改 ["tasks"] 列表与 ["tasks", id] 详情两处缓存，
+ * onError 回滚快照，onSettled 再 invalidate 拉服务端真值（任务完成判定唯一入口在服务端）。
+ */
+function useStepMutation<TInput extends { stepId: number }>(
+  taskId: number,
+  mutationFn: (input: TInput) => Promise<{ ok: boolean }>,
+  buildPatch: (input: TInput) => Partial<TaskStep>,
+) {
+  const queryClient = useQueryClient();
+  const invalidateTasks = useInvalidateTasks();
+  return useMutation({
+    mutationFn,
+    onMutate: async (input: TInput) => {
+      await queryClient.cancelQueries({ queryKey: ["tasks"] });
+      const previousList = queryClient.getQueryData<{ tasks: TaskWithSteps[] }>(
+        ["tasks"],
+      );
+      const previousDetail = queryClient.getQueryData<{ task: TaskWithSteps }>([
+        "tasks",
+        taskId,
+      ]);
+      const patch = buildPatch(input);
+
+      queryClient.setQueryData<{ tasks: TaskWithSteps[] }>(
+        ["tasks"],
+        (current) =>
+          current
+            ? {
+                tasks: current.tasks.map((task) =>
+                  task.id === taskId
+                    ? applyStepMutation(task, input.stepId, patch)
+                    : task,
+                ),
+              }
+            : current,
+      );
+      queryClient.setQueryData<{ task: TaskWithSteps }>(
+        ["tasks", taskId],
+        (current) =>
+          current
+            ? { task: applyStepMutation(current.task, input.stepId, patch) }
+            : current,
+      );
+
+      return { previousList, previousDetail };
+    },
+    onError: (error, _input, context) => {
+      if (context?.previousList) {
+        queryClient.setQueryData(["tasks"], context.previousList);
+      }
+      if (context?.previousDetail) {
+        queryClient.setQueryData(["tasks", taskId], context.previousDetail);
+      }
+      // 乐观 UI 已回滚，必须让用户知道操作没生效
+      toast(
+        error instanceof Error ? error.message : "操作失败，请重试",
+        "error",
+      );
+    },
+    onSettled: invalidateTasks,
+  });
+}
+
 export function useCreateTask() {
   const invalidate = useInvalidateTasks();
   return useMutation({
@@ -207,30 +334,38 @@ export function useUnarchiveTask() {
 }
 
 export function useCompleteStep(taskId: number) {
-  const invalidate = useInvalidateTasks();
-  return useMutation({
-    mutationFn: ({
-      stepId,
-      ...input
-    }: CompleteStepInput & { stepId: number }) =>
+  return useStepMutation<CompleteStepInput & { stepId: number }>(
+    taskId,
+    ({ stepId, ...input }) =>
       postJson<{ ok: boolean }>(
         `/api/tasks/${taskId}/steps/${stepId}/complete`,
         input,
       ),
-    onSuccess: invalidate,
-  });
+    (input) => ({
+      status: "completed",
+      completedAt: toDbTimestamp(),
+      resultUrl: input.resultUrl ?? null,
+      resultText: input.resultText ?? null,
+    }),
+  );
 }
 
 export function useUndoStep(taskId: number) {
-  const invalidate = useInvalidateTasks();
-  return useMutation({
-    mutationFn: (stepId: number) =>
+  return useStepMutation<{ stepId: number }>(
+    taskId,
+    ({ stepId }) =>
       postJson<{ ok: boolean }>(
         `/api/tasks/${taskId}/steps/${stepId}/undo`,
         {},
       ),
-    onSuccess: invalidate,
-  });
+    () => ({
+      status: "pending",
+      completedAt: null,
+      resultUrl: null,
+      resultText: null,
+      retainUntil: null,
+    }),
+  );
 }
 
 export function useAddStep(taskId: number) {

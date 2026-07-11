@@ -22,6 +22,7 @@ export type TaskStep = {
   status: StepStatus;
   resultUrl: string | null;
   resultText: string | null;
+  retainUntil: string | null;
   completedAt: string | null;
   createdAt: string;
 };

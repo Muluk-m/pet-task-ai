@@ -71,6 +71,27 @@
       "when": 1783098423390,
       "tag": "0009_mute_supreme_intelligence",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1783734465461,
+      "tag": "0010_talented_mauler",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1783737057332,
+      "tag": "0011_romantic_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1783737972686,
+      "tag": "0012_flashy_kabuki",
+      "breakpoints": true
     }
   ]
 }

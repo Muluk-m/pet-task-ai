@@ -402,6 +402,8 @@ export const aiRouter = new Hono<Env>()
               user: buildUser(attempt === 0 ? undefined : lastError),
               jsonMode: true,
               temperature: 0.2,
+              // 多模态抽取（多张截图 + 推理模型）高峰期可能超 60s，放宽到 120s
+              timeoutMs: imageUrls.length > 0 ? 120_000 : undefined,
             });
             logAiTiming("extract_task_upstream", {
               userId,

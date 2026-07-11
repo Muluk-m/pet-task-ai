@@ -47,6 +47,7 @@ const task: TaskWithSteps = {
       status: "pending",
       resultUrl: null,
       resultText: null,
+      retainUntil: null,
       completedAt: null,
       createdAt: "2026-07-11 10:00:00",
     },

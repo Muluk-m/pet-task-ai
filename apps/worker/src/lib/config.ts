@@ -1,3 +1,4 @@
+import { LEGACY_MODEL_ALIASES } from "@pet-task-ai/shared";
 import { z } from "zod";
 import rawConfig from "../../../../pt.config.json";
 
@@ -166,7 +167,10 @@ export function getAiModelByRef(ref?: string | null): AiModelSelection | null {
     return null;
   }
   const provider = ptConfig.ai.providers[providerId];
-  const model = provider?.models.find((item) => item.id === modelId);
+  const resolvedId = provider?.models.some((item) => item.id === modelId)
+    ? modelId
+    : LEGACY_MODEL_ALIASES[modelId];
+  const model = provider?.models.find((item) => item.id === resolvedId);
   return provider && model ? { providerId, provider, model } : null;
 }
 

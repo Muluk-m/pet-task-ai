@@ -1,4 +1,5 @@
 import type { AiTaskExtraction } from "@pet-task-ai/shared";
+import { RULE_TEXT_MAX } from "@pet-task-ai/shared";
 import {
   BadgeCheck,
   Calendar,
@@ -238,7 +239,7 @@ export function AiCreatePage() {
         </div>
         <Textarea
           className="mt-3 min-h-40 border-0 bg-accent/40 shadow-none"
-          maxLength={2000}
+          maxLength={RULE_TEXT_MAX}
           placeholder={
             "粘贴商家发的活动说明，或直接上传聊天截图。例如：\n【置换规则】\n1. 收到商品后 7 天内完成以下内容\n2. 小红书发布图文笔记 1 篇，字数≥50..."
           }
@@ -246,7 +247,7 @@ export function AiCreatePage() {
           onChange={(event) => setRuleText(event.target.value)}
         />
         <p className="mt-1.5 text-right text-xs text-muted-foreground">
-          {ruleText.length}/2000
+          {ruleText.length}/{RULE_TEXT_MAX}
         </p>
 
         <div className="mt-2 flex gap-2">

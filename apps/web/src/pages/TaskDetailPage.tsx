@@ -22,6 +22,7 @@ import {
   Check,
   ChevronDown,
   ChevronLeft,
+  ClipboardPaste,
   Clock,
   Copy,
   GripVertical,
@@ -57,7 +58,13 @@ import { toast } from "../components/toast";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { deadlineInfo, formatDateTime, formatMoney } from "../lib/format";
+import {
+  deadlineInfo,
+  formatCnDate,
+  formatDateTime,
+  formatMoney,
+} from "../lib/format";
+import { extractHttpLink } from "../lib/links";
 import { cn } from "../lib/utils";
 
 const stepTitles: Record<TaskStepType, string> = {
@@ -146,6 +153,20 @@ function remainingLabel(deadline: string | null): string {
   return `剩余 ${daysLeft} 天`;
 }
 
+/** 本地日历日 YYYY-MM-DD（与 retain_until 裸字符串同口径，直接字符串比较不引入时区换算） */
+function todayLocalDate(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** 保留期是否仍在有效期内（截止日当天含在内）：retain_until >= 今天 */
+function isWithinRetention(retainUntil: string | null): boolean {
+  return retainUntil != null && retainUntil >= todayLocalDate();
+}
+
 export function TaskDetailPage() {
   const navigate = useNavigate();
   const params = useParams();
@@ -169,6 +190,8 @@ export function TaskDetailPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [addingStep, setAddingStep] = useState(false);
+  // 笔记/视频步骤完成时可选填的保留天数（按 stepId 暂存，仅用于本次提交）
+  const [retainDrafts, setRetainDrafts] = useState<Record<number, string>>({});
 
   const task = data?.task;
   const reorderSteps = useReorderSteps(taskId);
@@ -259,29 +282,58 @@ export function TaskDetailPage() {
 
     const draft = (drafts[expandedStep.id] ?? "").trim();
 
-    if (linkStepTypes.has(expandedStep.type)) {
-      if (!isValidUrl(draft)) {
-        toast(`请填写合法的${stepTitles[expandedStep.type]}链接`, "error");
-        return;
+    try {
+      if (linkStepTypes.has(expandedStep.type)) {
+        if (!isValidUrl(draft)) {
+          toast(`请填写合法的${stepTitles[expandedStep.type]}链接`, "error");
+          return;
+        }
+        const retainRaw = (retainDrafts[expandedStep.id] ?? "").trim();
+        const retainDays = retainRaw ? Number(retainRaw) : Number.NaN;
+        const validRetain =
+          Number.isInteger(retainDays) && retainDays >= 1 && retainDays <= 365;
+        if (retainRaw && !validRetain) {
+          toast("保留天数需为 1-365 的整数", "error");
+          return;
+        }
+        await completeStep.mutateAsync({
+          stepId: expandedStep.id,
+          resultUrl: draft,
+          ...(validRetain ? { retainDays } : {}),
+        });
+      } else if (expandedStep.type === "ecommerce_review") {
+        await completeStep.mutateAsync(
+          draft === ""
+            ? { stepId: expandedStep.id }
+            : isValidUrl(draft)
+              ? { stepId: expandedStep.id, resultUrl: draft }
+              : { stepId: expandedStep.id, resultText: draft },
+        );
+      } else {
+        await completeStep.mutateAsync({ stepId: expandedStep.id });
       }
-      await completeStep.mutateAsync({
-        stepId: expandedStep.id,
-        resultUrl: draft,
-      });
-    } else if (expandedStep.type === "ecommerce_review") {
-      await completeStep.mutateAsync(
-        draft === ""
-          ? { stepId: expandedStep.id }
-          : isValidUrl(draft)
-            ? { stepId: expandedStep.id, resultUrl: draft }
-            : { stepId: expandedStep.id, resultText: draft },
-      );
-    } else {
-      await completeStep.mutateAsync({ stepId: expandedStep.id });
+    } catch {
+      // 失败提示已由 useStepMutation 的 onError 统一弹出
+      return;
     }
 
     toast(`「${stepDisplayTitle(expandedStep)}」已完成`);
     setExpandedId(null);
+  }
+
+  async function pasteLinkFromClipboard(stepId: number) {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      const link = extractHttpLink(text) ?? text;
+      if (isValidUrl(link)) {
+        setDraft(stepId, link);
+        toast("已从剪贴板粘贴链接");
+      } else {
+        toast("剪贴板里没有识别到链接", "error");
+      }
+    } catch {
+      toast("无法读取剪贴板，请手动粘贴", "error");
+    }
   }
 
   async function handleArchive() {
@@ -329,6 +381,17 @@ export function TaskDetailPage() {
             >
               <Pencil size={15} />
               编辑任务
+            </button>
+            <button
+              className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-3 text-sm active:bg-muted"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                navigate(`/tasks/new?from=${task.id}`);
+              }}
+            >
+              <Copy size={15} />
+              复制任务
             </button>
             <button
               className="flex w-full items-center gap-2 border-t border-border/60 px-4 py-3 text-sm active:bg-muted"
@@ -558,11 +621,26 @@ export function TaskDetailPage() {
                                     </Button>
                                   </div>
                                 ) : null}
+                                {isWithinRetention(step.retainUntil) ? (
+                                  <p className="flex items-center gap-1.5 rounded-xl bg-warning-soft px-3 py-2 text-xs font-medium text-warning">
+                                    <Clock className="shrink-0" size={13} />
+                                    保留期至{" "}
+                                    {formatCnDate(step.retainUntil ?? "")}
+                                    ，期间勿删
+                                  </p>
+                                ) : null}
                                 <button
                                   className="flex items-center gap-1 text-xs text-primary"
                                   type="button"
                                   onClick={async () => {
-                                    await undoStep.mutateAsync(step.id);
+                                    try {
+                                      await undoStep.mutateAsync({
+                                        stepId: step.id,
+                                      });
+                                    } catch {
+                                      // 失败提示已由 useStepMutation 的 onError 统一弹出
+                                      return;
+                                    }
                                     toast("已撤销完成");
                                     setExpandedId(step.id);
                                   }}
@@ -588,6 +666,33 @@ export function TaskDetailPage() {
                                         setDraft(step.id, event.target.value)
                                       }
                                     />
+                                    <button
+                                      className="flex items-center gap-1 text-xs text-primary"
+                                      type="button"
+                                      onClick={() =>
+                                        pasteLinkFromClipboard(step.id)
+                                      }
+                                    >
+                                      <ClipboardPaste size={12} />
+                                      粘贴剪贴板里的链接
+                                    </button>
+                                    <div className="flex items-center gap-2 pt-0.5">
+                                      <Input
+                                        className="h-9 w-28 bg-card"
+                                        inputMode="numeric"
+                                        placeholder="保留天数"
+                                        value={retainDrafts[step.id] ?? ""}
+                                        onChange={(event) =>
+                                          setRetainDrafts((prev) => ({
+                                            ...prev,
+                                            [step.id]: event.target.value,
+                                          }))
+                                        }
+                                      />
+                                      <span className="text-xs text-muted-foreground">
+                                        规则要求保留天数，可选
+                                      </span>
+                                    </div>
                                     <p className="text-xs text-muted-foreground">
                                       请确保内容为公开可见，且包含产品真实体验
                                     </p>

@@ -1,3 +1,4 @@
+import { LEGACY_MODEL_ALIASES } from "@pet-task-ai/shared";
 import {
   Archive,
   Bell,
@@ -39,6 +40,7 @@ import {
   getSelectedAiModel,
   setSelectedAiModel,
 } from "../lib/ai-model";
+import { CASHBACK_WAIT_ALERT_DAYS, cashbackWaitDays } from "../lib/cashback";
 import { formatMoney, parseDbDate } from "../lib/format";
 import { compressImageFile, thumbnailUrl } from "../lib/image";
 import { flattenAiModelOptions } from "../lib/model-config";
@@ -342,6 +344,16 @@ function AiModelCard() {
       setSelected(stored);
       return;
     }
+    // 已下线模型：先按别名映射到同档新模型（如 gpt-5.5 → gpt-5.6-sol），
+    // 直接删除会让质量档偏好静默回落到默认速度档
+    const [providerId, modelId] = stored.split(":");
+    const aliasTarget = LEGACY_MODEL_ALIASES[modelId ?? ""];
+    const aliasRef = aliasTarget ? `${providerId}:${aliasTarget}` : null;
+    if (aliasRef && options.some((model) => model.ref === aliasRef)) {
+      setSelectedAiModel(aliasRef);
+      setSelected(aliasRef);
+      return;
+    }
     window.localStorage.removeItem(AI_MODEL_STORAGE_KEY);
     setSelected(data.defaultModel);
   }, [data, options]);
@@ -409,6 +421,8 @@ export function SettingsPage() {
     let total = 0;
     let thisMonth = 0;
     let pendingAmount = 0;
+    // 已等待超过阈值天数、需要催办的待回款任务笔数
+    let overdueWaitCount = 0;
 
     for (const task of all) {
       const amount = task.cashbackAmount ?? 0;
@@ -430,10 +444,14 @@ export function SettingsPage() {
         if (cashbackPending) {
           pendingAmount += amount;
         }
+        const waitDays = cashbackWaitDays(task);
+        if (waitDays != null && waitDays >= CASHBACK_WAIT_ALERT_DAYS) {
+          overdueWaitCount += 1;
+        }
       }
     }
 
-    return { total, thisMonth, pendingAmount };
+    return { total, thisMonth, pendingAmount, overdueWaitCount };
   }, [data]);
 
   const archivedTasks = (data?.tasks ?? []).filter(
@@ -471,6 +489,12 @@ export function SettingsPage() {
             <p className="text-lg font-bold text-warning">
               {formatMoney(stats.pendingAmount)}
             </p>
+            {stats.overdueWaitCount > 0 ? (
+              <p className="text-[11px] font-medium text-destructive">
+                其中 {stats.overdueWaitCount} 笔已等满{" "}
+                {CASHBACK_WAIT_ALERT_DAYS} 天
+              </p>
+            ) : null}
           </div>
         </div>
       </section>

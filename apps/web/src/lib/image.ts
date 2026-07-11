@@ -1,16 +1,25 @@
+import {
+  type CompressRequest,
+  type CompressResponse,
+  scaledSize,
+} from "./image-protocol";
+
+const JPEG_QUALITY = 0.82;
+
 async function drawToCanvas(
   source: Blob,
   maxDimension: number,
 ): Promise<HTMLCanvasElement> {
   const bitmap = await createImageBitmap(source);
-  const scale = Math.min(
-    1,
-    maxDimension / Math.max(bitmap.width, bitmap.height),
+  const { width, height } = scaledSize(
+    bitmap.width,
+    bitmap.height,
+    maxDimension,
   );
 
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  canvas.width = width;
+  canvas.height = height;
 
   const context = canvas.getContext("2d");
   if (!context) {
@@ -38,13 +47,156 @@ function canvasToBlob(
   });
 }
 
+/** 主线程压缩：canvas 缩放 + JPEG 重编码。作为 worker 不可用时的降级路径 */
+async function compressToJpegBlobOnMain(
+  source: Blob,
+  maxDimension: number,
+): Promise<Blob> {
+  const canvas = await drawToCanvas(source, maxDimension);
+  return canvasToBlob(canvas, "image/jpeg", JPEG_QUALITY);
+}
+
+// 图片压缩 worker：单例懒加载，用 id 关联并发请求；一旦判定不可用（老 Safari 无
+// OffscreenCanvas、worker 构建/运行失败）便永久降级到主线程，不再反复尝试。
+// 每个 job 带超时：worker 被浏览器静默杀死（不触发 error 事件）时 promise
+// 也必须 settle，否则上传永久转圈、主线程降级路径不可达。
+const WORKER_JOB_TIMEOUT_MS = 12_000;
+
+type PendingJob = {
+  resolve: (blob: Blob) => void;
+  reject: (error: Error) => void;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+let compressWorker: Worker | null = null;
+let workerUnavailable = false;
+let workerRequestId = 0;
+const pendingWorkerJobs = new Map<number, PendingJob>();
+
+/** 取出并清理一个在途 job（含超时定时器），已被超时清掉时返回 null */
+function takePendingJob(id: number): PendingJob | null {
+  const job = pendingWorkerJobs.get(id);
+  if (!job) {
+    return null;
+  }
+  clearTimeout(job.timer);
+  pendingWorkerJobs.delete(id);
+  return job;
+}
+
+function rejectAllPendingJobs(message: string) {
+  for (const [id] of pendingWorkerJobs) {
+    takePendingJob(id)?.reject(new Error(message));
+  }
+}
+
+function supportsOffscreenCompression(): boolean {
+  return (
+    typeof Worker !== "undefined" &&
+    typeof OffscreenCanvas !== "undefined" &&
+    typeof createImageBitmap === "function"
+  );
+}
+
+function getCompressWorker(): Worker | null {
+  if (workerUnavailable) {
+    return null;
+  }
+  if (compressWorker) {
+    return compressWorker;
+  }
+  if (!supportsOffscreenCompression()) {
+    workerUnavailable = true;
+    return null;
+  }
+  try {
+    const worker = new Worker(new URL("./image-worker.ts", import.meta.url), {
+      type: "module",
+    });
+    worker.addEventListener(
+      "message",
+      (event: MessageEvent<CompressResponse>) => {
+        const job = takePendingJob(event.data.id);
+        if (!job) {
+          return;
+        }
+        if ("error" in event.data) {
+          job.reject(new Error(event.data.error));
+        } else {
+          job.resolve(event.data.blob);
+        }
+      },
+    );
+    worker.addEventListener("error", () => {
+      // worker 整体崩溃：拒掉在途请求并永久降级
+      workerUnavailable = true;
+      rejectAllPendingJobs("图片处理 worker 异常");
+      compressWorker = null;
+    });
+    worker.addEventListener("messageerror", () => {
+      // 响应反序列化失败：无法定位具体 job，拒掉全部在途请求走主线程降级
+      rejectAllPendingJobs("图片处理 worker 响应异常");
+    });
+    compressWorker = worker;
+    return worker;
+  } catch {
+    workerUnavailable = true;
+    return null;
+  }
+}
+
+/** 优先用 worker + OffscreenCanvas 压缩，失败或不支持时降级到主线程 */
+async function compressToJpegBlob(
+  source: Blob,
+  maxDimension: number,
+): Promise<Blob> {
+  const worker = getCompressWorker();
+  if (worker) {
+    const id = ++workerRequestId;
+    try {
+      return await new Promise<Blob>((resolve, reject) => {
+        // 单例 worker 串行处理：批量上传时后排 job 的等待时间也在计时内，
+        // 超时预算按当前队列深度放宽，避免排队被误判为挂起
+        const timeoutMs = WORKER_JOB_TIMEOUT_MS * (pendingWorkerJobs.size + 1);
+        const timer = setTimeout(() => {
+          if (pendingWorkerJobs.delete(id)) {
+            reject(new Error("图片处理超时"));
+          }
+        }, timeoutMs);
+        pendingWorkerJobs.set(id, { resolve, reject, timer });
+        const request: CompressRequest = {
+          id,
+          blob: source,
+          maxDimension,
+          quality: JPEG_QUALITY,
+        };
+        worker.postMessage(request);
+      });
+    } catch (error) {
+      // 单次 worker 失败/超时：本次降级到主线程（worker 崩溃已在 error 回调里永久降级）；
+      // 保留 worker 侧错误便于排查，不静默吞掉
+      console.warn("[image] worker 压缩失败，降级主线程", error);
+    }
+  }
+  return compressToJpegBlobOnMain(source, maxDimension);
+}
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("图片读取失败"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 /** 压缩图片为 JPEG data URL，控制上传体积（长边默认 1600px） */
 export async function fileToCompressedDataUrl(
   file: File,
   maxDimension = 1600,
 ): Promise<string> {
-  const canvas = await drawToCanvas(file, maxDimension);
-  return canvas.toDataURL("image/jpeg", 0.82);
+  const blob = await compressToJpegBlob(file, maxDimension);
+  return blobToDataUrl(blob);
 }
 
 /** 上传前压缩图片文件：长边限制 + JPEG 重编码；小文件原样返回 */
@@ -55,8 +207,7 @@ export async function compressImageFile(
   if (file.size < 200_000) {
     return file;
   }
-  const canvas = await drawToCanvas(file, maxDimension);
-  const blob = await canvasToBlob(canvas, "image/jpeg", 0.82);
+  const blob = await compressToJpegBlob(file, maxDimension);
   return new File([blob], `${file.name.replace(/\.[^.]+$/, "")}.jpg`, {
     type: "image/jpeg",
   });

@@ -14,6 +14,7 @@ function step(partial: Partial<TaskStep>): TaskStep {
     status: "pending",
     resultUrl: null,
     resultText: null,
+    retainUntil: null,
     completedAt: null,
     createdAt: "2026-07-04 10:00:00",
     ...partial,

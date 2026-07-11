@@ -18,6 +18,11 @@ export function parseDbDate(value: string): Date {
   return new Date(`${value.replace(" ", "T")}Z`);
 }
 
+/** parseDbDate 的逆操作：生成与 D1 CURRENT_TIMESTAMP 同格式的 UTC 裸字符串 */
+export function toDbTimestamp(date: Date = new Date()): string {
+  return date.toISOString().replace("T", " ").slice(0, 19);
+}
+
 export function formatDateTime(value: string): string {
   return new Intl.DateTimeFormat("zh-CN", {
     dateStyle: "medium",
