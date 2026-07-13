@@ -14,7 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 已实现的辅助功能：
 - 素材管理：文案素材、宠物图片、商家评论图三类（图片存 R2，支持手机拍照直传）。
-- AI 一键创建：粘贴商家规则文字**或上传聊天截图（最多 3 张，前端 canvas 压缩为 JPEG data URL）** → `/api/ai/extract-task` 多模态结构化抽取（含每平台要求、置信度、存疑 notes）→ 预填表单人工确认 → 创建。gpt-5.6-sol 经此网关支持 image_url 图片输入。
+- AI 一键创建：粘贴商家规则文字**或上传聊天截图（最多 3 张，前端 canvas 压缩为 JPEG data URL）** → `/api/ai/extract-task` 多模态结构化抽取（含每平台要求、置信度、存疑 notes）→ 预填表单人工确认 → 创建。gpt-5.6-luna / gpt-5.6-sol 经此网关支持 image_url 图片输入。
 - 好评生成：选任务 + 选素材组合 + 平台（小红书/抖音/通用）+ 风格 + 字数 → `/api/ai/generate-review` 生成，存入 `generated_contents`。
 - 返现统计（我的页）：累计 / 本月 / 待回款，从任务数据前端聚合。
 - 任务编辑、归档与恢复（已归档列表在「我的」页）；任务一键复制（详情页菜单，预填字段与步骤开关并带走每平台 requirement，截止日/单号/封面不带）。
@@ -50,10 +50,10 @@ pnpm deploy               # wrangler deploy（先替换 wrangler.jsonc 的 datab
 
 ## 配置：pt.config.json（仓库根）
 
-- **AI 多 provider**：`ai.providers` 定义各家 baseUrl/model/apiKeyEnv，`ai.activeProvider` 切换。当前 qiliangjia 网关 + `gpt-5.6-sol`（视觉/质量档）与 `gpt-5.4-mini`（速度档，`models[0]` 即文本默认）。key 通过 `apiKeyEnv` 指向环境变量（本地 `apps/worker/.dev.vars`，生产 wrangler secret），**key 绝不能进仓库**。
+- **AI 多 provider**：`ai.providers` 定义各家 baseUrl/model/apiKeyEnv，`ai.activeProvider` 切换。当前 qiliangjia 网关 + `gpt-5.6-luna`（视觉/质量档默认，`gpt-5.6-sol` 为同档兜底）与 `gpt-5.4-mini`（速度档，`models[0]` 即文本默认）。key 通过 `apiKeyEnv` 指向环境变量（本地 `apps/worker/.dev.vars`，生产 wrangler secret），**key 绝不能进仓库**。
 - **push**：VAPID 公钥（可公开）、subject、提前提醒天数。VAPID 私钥在 secret `VAPID_PRIVATE_KEY`。
 - worker 端 `src/lib/config.ts` 用 Zod fail-fast 校验后 bundle 导入；web 端（我的页推送订阅）直接 import 该 JSON。
-- qiliangjia 网关是 ChatGPT/Codex 代理，不支持 gpt-4o 系列，可用 gpt-5.6-sol / gpt-5.6-terra / gpt-5.5 / gpt-5.4 / gpt-5.4-mini（`GET {baseUrl}/models` 可查；gpt-5.6-luna 在列表中但截至 2026-07 请求一直 503）。
+- qiliangjia 网关是 ChatGPT/Codex 代理，不支持 gpt-4o 系列，可用 gpt-5.6-luna / gpt-5.6-sol / gpt-5.6-terra / gpt-5.5 / gpt-5.4 / gpt-5.4-mini（`GET {baseUrl}/models` 可查；gpt-5.6-luna 曾长期 503，2026-07-13 实测已恢复，JSON 模式与 image_url 均正常）。
 - 生产 secrets 共三个：`OPENAI_API_KEY`、`AUTH_SECRET`（会话签名）、`VAPID_PRIVATE_KEY`。
 - AI 调用封装在 `apps/worker/src/lib/openai.ts`：JSON 模式 + Zod 校验 + 失败重试一次。
 

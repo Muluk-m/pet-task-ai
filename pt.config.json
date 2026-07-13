@@ -12,9 +12,15 @@
             "description": "速度优先，适合文案生成和文本规则识别"
           },
           {
+            "id": "gpt-5.6-luna",
+            "label": "GPT 5.6 Luna",
+            "description": "质量优先，适合截图识别和复杂规则抽取",
+            "supportsVision": true
+          },
+          {
             "id": "gpt-5.6-sol",
             "label": "GPT 5.6 Sol",
-            "description": "质量优先，适合截图识别和复杂规则抽取",
+            "description": "质量档备选，luna 不可用时的兜底",
             "supportsVision": true
           }
         ]
