@@ -4,7 +4,7 @@
     "providers": {
       "qiliangjia": {
         "baseUrl": "https://sub2api.qiliangjia.one/v1",
-        "model": "gpt-5.5",
+        "model": "gpt-5.6-luna",
         "apiKeyEnv": "OPENAI_API_KEY"
       },
       "deepseek": {
